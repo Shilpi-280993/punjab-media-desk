@@ -251,11 +251,13 @@ function daysBetween(a,b){return Math.round((parse(b)-parse(a))/86400000)}
 
 /* ---------- Connection to the Google Sheet ---------- */
 const CFG="pmd-config";
+const DEFAULT_API="https://script.google.com/macros/s/AKfycbx1nzgt0wnpQb7DXRtZmqZIQyiP8DUPX4NdiwMm64Ye82rALAGdSpc1hsSW94j7Ae_3/exec";
+const DEFAULT_SHEET="https://docs.google.com/spreadsheets/d/1emGY4R9dw5iLTGekdcrNFrh5nmiKW-CsbgMQHidHoYQ/edit";
 function loadCfg(){try{return JSON.parse(localStorage.getItem(CFG)||"null")}catch(e){return null}}
 function storeCfg(c){try{localStorage.setItem(CFG,JSON.stringify(c))}catch(e){}}
 let cfg=loadCfg();
 (function readHash(){const m=location.hash.match(/setup=([A-Za-z0-9_\-]+)/);if(!m)return;
-  try{const s=atob(m[1].replace(/-/g,"+").replace(/_/g,"/"));const [api,k]=s.split("|");if(api&&k){cfg={api,k};storeCfg(cfg)}}catch(e){}
+  try{const s=atob(m[1].replace(/-/g,"+").replace(/_/g,"/"));const [api,k]=s.split("|");if(api&&k){cfg={api,k,sheet:DEFAULT_SHEET};storeCfg(cfg)}}catch(e){}
   history.replaceState(null,"",location.pathname+location.search)})();
 function teamLink(){const s=btoa(cfg.api+"|"+cfg.k).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");return location.origin+location.pathname+"#setup="+s}
 
@@ -278,7 +280,10 @@ function queue(body){
     .catch(()=>{toast("Could not save to the Sheet. Check your connection; your last change may be lost.");setConn("Last change not saved","bad")})
     .finally(()=>{pendingWrites--;if(!pendingWrites){setConn("Saved to Google Sheet","ok");setTimeout(refresh,800)}});
 }
-function clean(a){const o={};FIELDS.forEach(f=>o[f]=a[f]??"");return o}
+/* A leading apostrophe makes Google Sheets store the value as plain text, so dates and times are not converted */
+function clean(a){const o={};FIELDS.forEach(f=>{const x=String(a[f]??"");o[f]=x&&f!=="id"?"'"+x:x});return o}
+function normDate(s){s=String(s||"").trim();if(!s||/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const d=new Date(s);return isNaN(d)?s:iso(d)}
+function normTime(s){s=String(s||"").trim();if(!s||/^\d{1,2}:\d{2}$/.test(s))return s;const m=s.match(/(\d{1,2}):(\d{2}):\d{2}/);return m?m[1].padStart(2,"0")+":"+m[2]:s}
 function save(a){a.updatedAt=new Date().toISOString();const i=state.acts.findIndex(x=>x.id===a.id);if(i>=0)state.acts[i]=a;else state.acts.push(a);render();queue({op:"save",row:clean(a)})}
 function patch(id,p){const a=state.acts.find(x=>x.id===id);if(!a)return;save({...a,...p})}
 function remove(id){state.acts=state.acts.filter(a=>a.id!==id);render();queue({op:"delete",id})}
@@ -289,7 +294,7 @@ async function refresh(){
   if(!cfg||pendingWrites||(drag&&drag.active))return;
   try{const r=await apiGet();if(r.error==="key"){setConn("Wrong desk key","bad");if(!loaded)showSetup("The desk key was not accepted. Check it and try again.");return}
     if(pendingWrites)return;
-    state.acts=(r.acts||[]).filter(a=>a.id);state.briefs=r.briefs||{};
+    state.acts=(r.acts||[]).filter(a=>a.id).map(a=>({...a,date:normDate(a.date),time:normTime(a.time)}));state.briefs=r.briefs||{};
     const first=!loaded;loaded=true;setConn("Connected to Google Sheet","ok");
     if(first||!busyTyping())render()}
   catch(e){setConn(loaded?"Offline. Showing last loaded data":"Can't reach the Google Sheet","bad");if(!loaded)showSetup("Could not reach the Sheet. Check the Web app URL, and that it is deployed with access for Anyone.")}
@@ -520,15 +525,18 @@ document.getElementById("btnNew").onclick=()=>openNew(state.month===TODAY.slice(
 
 /* ---------- Setup screen ---------- */
 function showSetup(msg){
-  main.innerHTML=`<div class="setup"><h2>Connect to the Google Sheet</h2>
-  <p class="muted" style="margin:0">This calendar keeps its data in your “Punjab Media Desk Data” Google Sheet. Enter the Web app URL from the Sheet's Apps Script deployment and the desk key. If someone sent you a team link, open that link instead and this step is skipped.</p>
-  <label>Web app URL<input type="url" id="cApi" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg&&cfg.api||"")}"></label>
-  <label>Desk key<input type="text" id="cKey" value="${esc(cfg&&cfg.k||"")}"></label>
-  <label>Google Sheet link (optional)<input type="url" id="cSheet" value="${esc(cfg&&cfg.sheet||"")}"></label>
+  main.innerHTML=`<div class="setup"><h2>Enter the desk key</h2>
+  <p class="muted" style="margin:0">This calendar is for the Punjab Media Desk team. Enter the desk key you were given, or open the team link someone sent you and this step is skipped.</p>
+  <label>Desk key<input type="text" id="cKey" value="${esc(cfg&&cfg.k||"")}" autocomplete="off"></label>
+  <details><summary class="small muted" style="cursor:pointer">Advanced</summary>
+  <div style="display:grid;gap:10px;margin-top:8px">
+  <label>Web app URL<input type="url" id="cApi" value="${esc(cfg&&cfg.api||DEFAULT_API)}"></label>
+  <label>Google Sheet link<input type="url" id="cSheet" value="${esc(cfg&&cfg.sheet||DEFAULT_SHEET)}"></label></div></details>
   ${msg?`<div class="err">${esc(msg)}</div>`:""}
-  <div><button class="btn primary" id="cGo" type="button">Connect</button></div></div>`;
+  <div><button class="btn primary" id="cGo" type="button">Open calendar</button></div></div>`;
+  document.getElementById("cKey").onkeydown=e=>{if(e.key==="Enter")document.getElementById("cGo").click()};
   document.getElementById("cGo").onclick=()=>{const api=document.getElementById("cApi").value.trim(),k=document.getElementById("cKey").value.trim(),sheet=document.getElementById("cSheet").value.trim();
-    if(!/^https:\/\/script\.google\.com\//.test(api)||!k){showSetup("Enter a script.google.com Web app URL and the desk key.");return}
+    if(!/^https:\/\/script\.google\.com\//.test(api)||!k){showSetup("Enter the desk key.");return}
     cfg={api,k,sheet};storeCfg(cfg);loaded=false;setConn("Connecting…");refresh()};
 }
 
