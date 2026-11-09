@@ -8,11 +8,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-/* Layout: header bar, segmented tabs, then Calendar / Data / Pending. PCs are blue, events are teal; green done, amber pending, red overdue. */
+/* Layout: header bar, segmented tabs, then Calendar / Data / Pending. PCs are blue, CM PCs are purple, events are teal; green done, amber pending, red overdue. */
 :root{
   --bg:#f4f6f9; --surface:#ffffff; --fg:#1d2733; --muted:#5f6b7a; --line:#dde3ea; --soft:#eef1f5;
   --brand:#1f3a5f; --brand-fg:#ffffff;
-  --pc:#2f5bd3; --pc-bg:#e9efff; --ev:#0f8a7e; --ev-bg:#e3f5f2;
+  --pc:#2f5bd3; --pc-bg:#e9efff; --ev:#0f8a7e; --ev-bg:#e3f5f2; --cm:#7a2fc2; --cm-bg:#f2e8fd; --cm-fg:#ffffff;
   --ok:#1e7f43; --ok-bg:#dff3e6; --wait:#a15c00; --wait-bg:#fff1d6; --late:#c0352b; --late-bg:#fde4e1; --na:#8a94a3; --na-bg:#eef0f3;
   --sans:"Source Sans 3","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
   --r:8px; color-scheme:light;
@@ -20,7 +20,7 @@
 @media (prefers-color-scheme: dark){:root{
   --bg:#12171e; --surface:#1a212b; --fg:#e6ebf1; --muted:#9aa6b4; --line:#2e3946; --soft:#222b36;
   --brand:#24456f; --brand-fg:#ffffff;
-  --pc:#8fb0ff; --pc-bg:#1e2a4a; --ev:#5fd0c3; --ev-bg:#16332f;
+  --pc:#8fb0ff; --pc-bg:#1e2a4a; --ev:#5fd0c3; --ev-bg:#16332f; --cm:#c9a2ff; --cm-bg:#2f2145; --cm-fg:#241433;
   --ok:#6fd497; --ok-bg:#173524; --wait:#f2b55a; --wait-bg:#3a2a10; --late:#ff8a80; --late-bg:#3f1d1a; --na:#8792a0; --na-bg:#252d37; color-scheme:dark}}
 
 *{box-sizing:border-box}
@@ -53,6 +53,9 @@ button{cursor:pointer}
 .tabs button{border:none;background:none;padding:6px 16px;border-radius:999px;color:var(--muted);font-weight:600}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .tabs .count{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:999px;background:var(--wait-bg);color:var(--wait);font-size:.75rem}
+.navl{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tabs .pcn{margin-left:5px;font-size:.78rem;opacity:.75;font-variant-numeric:tabular-nums}
+#pcTabs button[data-f="cm"][aria-selected="true"]{background:var(--cm);color:var(--cm-fg)}
 .conn{font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:6px}
 .conn i{width:8px;height:8px;border-radius:50%;background:var(--na);display:inline-block}
 .conn.ok i{background:var(--ok)} .conn.bad i{background:var(--late)}
@@ -68,7 +71,7 @@ textarea{width:100%;min-height:60px}
 
 /* tags and status pills */
 .tag{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:0 6px;border-radius:4px;vertical-align:1px}
-.tag.pc{background:var(--pc-bg);color:var(--pc)} .tag.ev{background:var(--ev-bg);color:var(--ev)}
+.tag.pc{background:var(--pc-bg);color:var(--pc)} .tag.ev{background:var(--ev-bg);color:var(--ev)} .tag.cmpc{background:var(--cm);color:var(--cm-fg)}
 .marks{display:inline-flex;gap:3px;flex-wrap:wrap}
 .mk{display:inline-block;font-size:.66rem;font-weight:700;min-width:22px;text-align:center;border-radius:4px;padding:0 3px;line-height:1.45}
 .mk.done{background:var(--ok-bg);color:var(--ok)}
@@ -77,6 +80,9 @@ textarea{width:100%;min-height:60px}
 .mk.na{background:var(--na-bg);color:var(--na);text-decoration:line-through}
 .legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.82rem;color:var(--muted)}
 .legend span{display:inline-flex;gap:4px;align-items:center}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+.sw.done{background:var(--ok)} .sw.open{background:var(--wait)} .sw.late{background:var(--late)} .sw.na{background:var(--na)}
+.sw.wk{border:1px dashed var(--muted)}
 
 /* calendar */
 .calnav h2{min-width:180px;text-align:center;font-size:1.25rem}
@@ -95,12 +101,23 @@ textarea{width:100%;min-height:60px}
 .cal .add{background:none;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:.9rem;line-height:1;padding:2px 7px;opacity:0}
 .cal .day:hover .add,.cal .add:focus-visible{opacity:1}
 @media (hover:none){.cal .add{opacity:1}}
-.chip{display:grid;gap:3px;border:1px solid transparent;border-left:4px solid var(--pc);border-radius:6px;padding:4px 6px;background:var(--pc-bg);font-size:.8rem;line-height:1.25;cursor:grab;text-align:left;width:100%;touch-action:manipulation;color:var(--fg)}
+.chip{position:relative;display:grid;gap:3px;border:1px solid transparent;border-left:4px solid var(--pc);border-radius:6px;padding:4px 6px;background:var(--pc-bg);font-size:.8rem;line-height:1.25;cursor:grab;text-align:left;width:100%;touch-action:manipulation;color:var(--fg)}
 .chip.ev{border-left-color:var(--ev);background:var(--ev-bg)}
+.chip.cmpc{border-left-color:var(--cm);background:var(--cm-bg)}
 .chip.late{border-color:var(--late);border-left-color:var(--late)}
 .chip:hover{filter:brightness(.98);box-shadow:0 1px 4px rgba(0,0,0,.12)}
-.chip .ct{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .ct{padding-right:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip .cm{color:var(--muted);font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .dn{position:absolute;top:3px;right:3px;width:16px;height:16px;border:1.5px solid var(--na);border-radius:4px;display:grid;place-items:center;font-size:.68rem;line-height:1;color:transparent;background:var(--surface);cursor:pointer}
+.chip .dn:hover{border-color:var(--ok);color:var(--ok)}
+.chip .dn.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.chip.wk{border:1px dashed var(--line);border-left:4px solid var(--pc);padding:2px 5px}
+.chip.wk.ev{border-left-color:var(--ev)}
+.chip.wk.cmpc{border-left-color:var(--cm)}
+.chip.inactive,.chip.bl.inactive,.chip.wk.inactive{background:var(--soft);border-left-color:var(--na);opacity:.6;filter:grayscale(1)}
+.chip.inactive .ct{text-decoration:line-through}
+.wkh{font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+.wkbox{display:grid;gap:3px;max-height:190px;overflow-y:auto;align-content:start}
 .chip.dragging{opacity:.35}
 .ghost-chip{position:fixed;pointer-events:none;z-index:50;box-shadow:0 8px 22px rgba(0,0,0,.25);width:170px;cursor:grabbing}
 
@@ -114,13 +131,14 @@ textarea{width:100%;min-height:60px}
 .backlog h3{font-size:1.02rem}
 .blf{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .blf input[type=search]{grid-column:1/-1}
-.blf select{font-size:.85rem;padding:4px 6px}
+.blf select{grid-column:1/-1;font-size:.85rem;padding:4px 6px}
 .blf label{grid-column:1/-1;display:flex;gap:6px;align-items:center;color:var(--muted)}
 .blist{overflow-y:auto;display:grid;gap:6px;align-content:start;padding-right:2px}
 @media (max-width:1100px){.blist{max-height:420px}}
 .blwk{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:6px}
 .chip.bl{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--pc)}
 .chip.bl.ev{border-left-color:var(--ev)}
+.chip.bl.cmpc{border-left-color:var(--cm);background:var(--cm-bg)}
 .chip.bl.closed{opacity:.6}
 .chip .cm{white-space:nowrap}
 .fchips{display:flex;flex-wrap:wrap;gap:3px}
@@ -132,6 +150,11 @@ table{border-collapse:collapse;width:100%;font-size:.88rem}
 th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--soft);white-space:nowrap;position:sticky;top:0;z-index:1}
 tbody tr:hover{background:var(--soft)}
+tbody tr.cmpc{background:var(--cm-bg)}
+tbody tr.cmpc td:first-child{box-shadow:inset 4px 0 0 var(--cm)}
+tbody tr.inactive{background:none}
+tbody tr.inactive td{opacity:.5}
+tbody tr.inactive td:first-child{box-shadow:inset 4px 0 0 var(--na)}
 td input,td select{width:100%;font-size:.86rem;padding:4px 5px}
 td.w-type{min-width:92px}td.w-date{min-width:140px}td.w-time{min-width:100px}td.w-title{min-width:220px}td.w-mid{min-width:140px}td.w-st{min-width:118px}td.w-link{min-width:160px}
 select.s-done{background:var(--ok-bg);color:var(--ok);border-color:transparent;font-weight:600}
@@ -164,6 +187,7 @@ dialog::backdrop{background:rgba(15,23,35,.5)}
 .typesw button{border:none;background:none;padding:5px 16px;border-radius:999px;font-weight:600;color:var(--muted)}
 .typesw button[data-t="PC"][aria-pressed="true"]{background:var(--pc);color:#fff}
 .typesw button[data-t="Event"][aria-pressed="true"]{background:var(--ev);color:#fff}
+.typesw button[data-t="CM PC"][aria-pressed="true"]{background:var(--cm);color:var(--cm-fg)}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
 .form label{display:grid;gap:3px;font-size:.82rem;color:var(--muted);font-weight:600}
 .form .full{grid-column:1/-1}
@@ -178,6 +202,7 @@ dialog::backdrop{background:rgba(15,23,35,.5)}
 @media (max-width:560px){.form{grid-template-columns:1fr}.srow{grid-template-columns:1fr}}
 .foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
 .confirm{border:1px solid var(--late);background:var(--late-bg);padding:10px;border-radius:var(--r);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn.doneb{background:var(--ok);border-color:var(--ok);color:#fff}
 .btn.danger{background:var(--late);border-color:var(--late);color:#fff}
 
 /* sub-parts toggles */
@@ -214,10 +239,18 @@ th.ck{text-align:center;white-space:normal;min-width:64px;line-height:1.2}
 
 <div class="wrap">
   <div class="navrow">
+    <div class="navl">
     <div class="tabs" role="tablist" id="tabs">
       <button role="tab" data-v="calendar" aria-selected="true" type="button">Calendar</button>
       <button role="tab" data-v="pending" aria-selected="false" type="button">Pending<span class="count" id="pendCount" hidden></span></button>
       <button role="tab" data-v="data" aria-selected="false" type="button">Data</button>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Filter by PC type" id="pcTabs">
+      <button role="tab" data-f="minister" aria-selected="false" type="button">Minister PC<span class="pcn" id="pcn-minister"></span></button>
+      <button role="tab" data-f="cm" aria-selected="false" type="button">CM PC<span class="pcn" id="pcn-cm"></span></button>
+      <button role="tab" data-f="all" aria-selected="true" type="button">All<span class="pcn" id="pcn-all"></span></button>
+    </div>
+    <select id="pocF" aria-label="Filter by POC"><option value="">All POCs</option></select>
     </div>
     <div class="conn" id="conn"><i></i><span>Connecting…</span></div>
   </div>
@@ -251,7 +284,7 @@ function applicable(a){return ITEMS.filter(i=>i.when(a))}
 function isClosed(a){return /^(done|dropped)$/i.test(a.status||"")||/^inaugurated/i.test(a.week||"")}
 function stateOf(a,it){const x=v(a,it);if(x==="Pending")return a.date&&addDays(a.date,it.off)<TODAY?"late":"open";if(x==="NA"||x==="Not needed")return"na";return"done"}
 function isOpen(a,it){return v(a,it)==="Pending"}
-function isLate(a){return applicable(a).some(it=>stateOf(a,it)==="late")}
+function isLate(a){return !isClosed(a)&&applicable(a).some(it=>stateOf(a,it)==="late")}
 
 /* ---------- Dates ---------- */
 function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -277,7 +310,7 @@ async function apiGet(){const r=await fetch(cfg.api+"?k="+encodeURIComponent(cfg
 async function apiPost(body){const r=await fetch(cfg.api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,k:cfg.k})});return r.json()}
 
 /* ---------- State ---------- */
-const state={acts:[],briefs:{},view:"calendar",month:TODAY.slice(0,7),q:"",dataScope:"month"};
+const state={acts:[],briefs:{},view:"calendar",pcf:"all",poc:"",month:TODAY.slice(0,7),q:"",dataScope:"month"};
 let pendingWrites=0,writeChain=Promise.resolve(),loaded=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function uid(p){return p+"-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
@@ -318,91 +351,125 @@ const main=document.getElementById("main");
 function render(){
   if(!cfg)return showSetup();
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===state.view));
-  const n=state.acts.filter(a=>a.date).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
+  document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>matchPoc(a)&&matchPcf(a,b.dataset.f)).length});
+  drawPocFilter();
+  const n=visible().filter(a=>a.date&&!isClosed(a)).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
   const keep=document.activeElement&&document.activeElement.id&&main.contains(document.activeElement)?document.activeElement.id:null;
   ({calendar:renderCal,data:renderData,pending:renderPending})[state.view]();
   if(keep){const el=document.getElementById(keep);if(el)el.focus()}
   if(openId&&dlg.open)refreshDialog();
 }
 function marksHTML(a){return `<span class="marks">${CHIP_MARKS.map(k=>{const it=ITEMS.find(i=>i.k===k);return `<span class="mk ${stateOf(a,it)}" title="${esc(it.label)}: ${esc(OPT_LABEL[v(a,it)]||v(a,it))}">${it.short}</span>`}).join("")}</span>`}
-function typeTag(a){return `<span class="tag ${a.type==="Event"?"ev":"pc"}">${a.type==="Event"?"Event":"PC"}</span>`}
+function isDoneSt(a){return /^done$/i.test(a.status||"")}
+function toggleDone(id){const a=state.acts.find(x=>x.id===id);if(!a)return;const old=a.status||"",on=!isDoneSt(a);patch(id,{status:on?"Done":"Pending"});toast(on?"Marked done":"Reopened",()=>patch(id,{status:old}))}
+function doneBox(a){const on=isDoneSt(a);return `<span class="dn${on?" on":""}" title="${on?"Reopen":"Mark as done"}">✓</span>`}
+function wireDone(c,a){const d=c.querySelector(".dn");d.onpointerdown=e=>e.stopPropagation();d.ondblclick=e=>e.stopPropagation();d.onclick=e=>{e.preventDefault();e.stopPropagation();toggleDone(a.id)}}
+/* A target week runs Monday to Sunday, and the 1st week of a month is the first such week with at least four days in that month. */
+function weekSunday(w){const m=String(w||"").match(/(\d)\w*\s+week\s+(\w{3})/i);if(!m)return"";const mo=MON[m[2].toLowerCase()];if(!mo)return"";
+  const now=parse(TODAY),cy=now.getFullYear(),cur=now.getMonth()+1,y=mo<7&&cur>=7?cy+1:mo>=7&&cur<7?cy-1:cy;
+  const d=new Date(y,mo-1,4);d.setDate(4+(7-d.getDay())%7+(Number(m[1])-1)*7);return iso(d)}
+function typeTag(a){if(isCmPc(a))return `<span class="tag cmpc">CM PC</span>`;return `<span class="tag ${a.type==="Event"?"ev":"pc"}">${a.type==="Event"?"Event":"PC"}</span>`}
 
 function renderCal(){
+  const wkScroll={};main.querySelectorAll(".wkbox").forEach(b=>wkScroll[b.dataset.d]=b.scrollTop);
   main.innerHTML="";const vw=document.createElement("div");vw.className="view";
+  const byWk={};visible().filter(a=>!a.date).forEach(a=>{const s=weekSunday(a.week);if(s)(byWk[s]=byWk[s]||[]).push(a)});
   const [y,m]=state.month.split("-").map(Number);const first=new Date(y,m-1,1);
   const brief=state.briefs[TODAY];
   if(brief&&brief.text){const d=document.createElement("details");d.className="brief";d.innerHTML=`<summary>Today's morning brief</summary>`;const p=document.createElement("div");p.style.marginTop="6px";p.textContent=brief.text;d.append(p);vw.append(d)}
   const bar=document.createElement("div");bar.className="bar";
   bar.innerHTML=`<div class="left calnav"><button class="btn sm" id="pm" type="button" aria-label="Previous month">‹</button><h2>${first.toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</h2><button class="btn sm" id="nm" type="button" aria-label="Next month">›</button><button class="btn sm" id="tm" type="button">Today</button></div>
-  <div class="legend"><span>${typeTag({type:"PC"})}</span><span>${typeTag({type:"Event"})}</span><span><span class="mk done">OK</span>done</span><span><span class="mk open">OK</span>pending</span><span><span class="mk late">OK</span>overdue</span><span><span class="mk na">OK</span>not applicable</span><span class="small">OP one pager · PR · DG digital · SM social</span></div>`;
+  <div class="legend"><span>${typeTag({type:"PC"})}</span><span class="tag cmpc">CM PC</span><span>${typeTag({type:"Event"})}</span><span><i class="sw done"></i>done</span><span><i class="sw open"></i>pending</span><span><i class="sw late"></i>overdue</span><span><i class="sw na"></i>not applicable</span><span><i class="sw wk"></i>target week</span><span><s>Entry</s> finished</span><span class="small">OP one pager · PR happened · DG digital report · SM social report</span></div>`;
   vw.append(bar);
   const wrap=document.createElement("div");wrap.className="calwrap";const cal=document.createElement("div");cal.className="cal";
   ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d=>cal.insertAdjacentHTML("beforeend",`<div class="dow">${d}</div>`));
   const start=new Date(first);start.setDate(1-((first.getDay()+6)%7));
   for(let i=0;i<42;i++){
     const d=new Date(start);d.setDate(start.getDate()+i);const ds=iso(d);if(i>=35&&d.getMonth()!==m-1)break;
-    const items=state.acts.filter(a=>a.date===ds).sort((p,q)=>(p.time||"99").localeCompare(q.time||"99"));
+    const items=visible().filter(a=>a.date===ds).sort((p,q)=>(p.time||"99").localeCompare(q.time||"99"));
     const cell=document.createElement("div");cell.className="day"+(d.getMonth()!==m-1?" out":"")+(ds===TODAY?" today":"")+(i%7>=5?" wkend":"");cell.dataset.date=ds;
     cell.innerHTML=`<div class="dh"><span class="d">${d.getDate()}</span><button class="add" type="button" aria-label="Add on ${fmt(ds)}">+</button></div>`;
     cell.querySelector(".add").onclick=e=>{e.stopPropagation();openNew(ds)};
     cell.ondblclick=e=>{if(!e.target.closest(".chip"))openNew(ds)};
     items.forEach(a=>{
-      const c=document.createElement("button");c.type="button";c.className="chip"+(a.type==="Event"?" ev":"")+(isLate(a)?" late":"");c.dataset.id=a.id;
+      const c=document.createElement("button");c.type="button";c.className="chip"+(a.type==="Event"?" ev":"")+(isCmPc(a)?" cmpc":"")+(isClosed(a)?" inactive":"")+(isLate(a)?" late":"");c.dataset.id=a.id;
       c.setAttribute("aria-label",`${a.type}: ${a.title||"Untitled"}. Double-click to open.`);
-      c.innerHTML=`<span class="ct">${a.time?esc(a.time)+" · ":""}${esc(a.title||"Untitled")}</span><span class="cm">${typeTag(a)} ${esc(a.venue||[a.sector,a.poc].filter(Boolean).join(" · "))}</span>${marksHTML(a)}`;
+      c.innerHTML=`<span class="ct">${a.time?esc(a.time)+" · ":""}${esc(a.title||"Untitled")}</span><span class="cm">${typeTag(a)} ${esc(a.venue||[a.sector,a.poc].filter(Boolean).join(" · "))}</span>${marksHTML(a)}${doneBox(a)}`;
       c.ondblclick=e=>{e.stopPropagation();openEdit(a.id)};
       c.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();openEdit(a.id)}};
-      attachDrag(c,a.id);cell.append(c)});
+      wireDone(c,a);attachDrag(c,a.id);cell.append(c)});
+    const wkItems=(byWk[ds]||[]).sort((p,q)=>isClosed(p)-isClosed(q)||isCmPc(q)-isCmPc(p)||(p.sector||"").localeCompare(q.sector||""));
+    if(wkItems.length){cell.insertAdjacentHTML("beforeend",`<div class="wkh">${esc(wkItems[0].week)} · ${wkItems.length}</div>`);
+      const box=document.createElement("div");box.className="wkbox";box.dataset.d=ds;
+      wkItems.forEach(a=>{const c=document.createElement("button");c.type="button";c.className="chip wk"+(a.type==="Event"?" ev":"")+(isCmPc(a)?" cmpc":"")+(isClosed(a)?" inactive":"");c.dataset.id=a.id;c.title=`${a.title||"Untitled"} (target: ${a.week}). Drag to a day to fix the date.`;
+        c.innerHTML=`<span class="ct">${esc(a.title||"Untitled")}</span>${doneBox(a)}`;
+        c.ondblclick=e=>{e.stopPropagation();openEdit(a.id)};c.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();openEdit(a.id)}};
+        wireDone(c,a);attachDrag(c,a.id);box.append(c)});
+      cell.append(box)}
     cal.append(cell)}
   wrap.append(cal);
   const grid=document.createElement("div");grid.className="calgrid";grid.append(wrap,backlogPanel());vw.append(grid);
   vw.insertAdjacentHTML("beforeend",`<div class="small muted">Double-click an entry to open it. Double-click an empty part of a day, or press +, to add one. Drag an entry to another day to move it, or from “To schedule” onto a day to schedule it. Drag it back onto the list to unschedule. On a phone: tap to open, press and hold to drag.</div>`);
   main.append(vw);
+  main.querySelectorAll(".wkbox").forEach(b=>{if(wkScroll[b.dataset.d])b.scrollTop=wkScroll[b.dataset.d]});
   const shift=n=>{const d=new Date(y,m-1+n,1);state.month=iso(d).slice(0,7);render()};
   document.getElementById("pm").onclick=()=>shift(-1);document.getElementById("nm").onclick=()=>shift(1);document.getElementById("tm").onclick=()=>{state.month=TODAY.slice(0,7);render()};
   wireBacklog();
 }
 
 /* ---------- To schedule (activities without a date) ---------- */
-const bl={q:"",sector:"",poc:"",closed:false};
+const bl={q:"",sector:"",closed:false};
 const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 function weekKey(w){const m=String(w||"").match(/(\d)\w*\s+week\s+(\w{3})/i);if(m){let mo=MON[m[2].toLowerCase()]||0;if(mo<7)mo+=12;return mo*10+Number(m[1])}
   if(/anytime/i.test(w))return 900;if(/inaugurated/i.test(w))return 990;return 950}
-const FMT_SHORT={"CM level":"CM","PC":"PC","Minister site visit":"Site visit","Event with Minister":"Event","Op-ed":"Op-ed","Print ad":"Ad","Beneficiary interaction":"Beneficiaries"};
+const FMT_SHORT={"PC":"PC","Minister site visit":"Site visit","Event with Minister":"Event","Op-ed":"Op-ed","Print ad":"Ad","Beneficiary interaction":"Beneficiaries"};
 /* Sub-parts of an activity (the Yes/No columns of the Media Calendar), stored as a comma list in "formats" */
-const FORMATS=["CM level","PC","Minister site visit","Event with Minister","Op-ed","Print ad","Beneficiary interaction"];
+const FORMATS=["PC","Minister site visit","Event with Minister","Op-ed","Print ad","Beneficiary interaction"];
 function fmtList(a){return (a.formats||"").split(",").map(s=>s.trim()).filter(Boolean)}
 function hasFmt(a,f){return fmtList(a).includes(f)}
+/* A PC is an entry of type PC, or any entry with the PC sub-part ticked. It is a CM PC when also marked CM level or To be done by CM. */
+function isPcEntry(a){return a.type==="PC"||hasFmt(a,"PC")}
+function isCmPc(a){return isPcEntry(a)&&(hasFmt(a,"CM level")||a.status==="To be done by CM")}
+/* Switching between PC, CM PC and Event. CM PC is stored as the "CM level" value in formats, so existing Sheet rows keep working. */
+function typeOf(a){return isCmPc(a)?"CM PC":a.type}
+function typePatch(a,t){const rest=fmtList(a).filter(x=>x!=="CM level");
+  if(t==="CM PC"){const p={formats:["CM level",...rest].join(", ")};if(!isCmPc(a))p.type="PC";return p}
+  const p={type:t,formats:rest.join(", ")};if(a.status==="To be done by CM")p.status="Pending";return p}
+function matchPcf(a,f){return f==="all"||(f==="cm"?isCmPc(a):isPcEntry(a)&&!isCmPc(a))}
+function pocList(a){return (a.poc||"").split(/[,&\/]+|\s+and\s+/i).map(s=>s.trim()).filter(Boolean)}
+function matchPoc(a){return !state.poc||pocList(a).some(x=>x.toLowerCase()===state.poc.toLowerCase())}
+function visible(){return state.acts.filter(a=>matchPoc(a)&&matchPcf(a,state.pcf))}
+function drawPocFilter(){const s=document.getElementById("pocF"),seen=new Map();state.acts.forEach(a=>pocList(a).forEach(x=>{if(!seen.has(x.toLowerCase()))seen.set(x.toLowerCase(),x)}));
+  if(state.poc&&!seen.has(state.poc.toLowerCase()))seen.set(state.poc.toLowerCase(),state.poc);
+  const names=[...seen.values()].sort((p,q)=>p.localeCompare(q)),key=names.join("|");if(s.dataset.key!==key){s.dataset.key=key;s.innerHTML=`<option value="">All POCs</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}s.value=state.poc}
 function toggleFmt(a,f,on){const cur=fmtList(a).filter(x=>x!==f);if(on)cur.push(f);
   const p={formats:FORMATS.filter(x=>cur.includes(x)).concat(cur.filter(x=>!FORMATS.includes(x))).join(", ")};
   if(f==="Print ad"){if(on&&(!a.printAd||a.printAd==="None"))p.printAd="Size TBD";if(!on)p.printAd="None"}
   return p}
-function fmtChips(a){return (a.formats||"").split(",").map(s=>s.trim()).filter(Boolean).map(f=>`<span class="fchip">${esc(FMT_SHORT[f]||f)}</span>`).join("")}
+function fmtChips(a){return fmtList(a).filter(f=>f!=="CM level").map(f=>`<span class="fchip">${esc(FMT_SHORT[f]||f)}</span>`).join("")}
 function backlogPanel(){
-  const all=state.acts.filter(a=>!a.date);
-  const sectors=[...new Set(all.map(a=>a.sector).filter(Boolean))].sort(),pocs=[...new Set(all.map(a=>a.poc).filter(Boolean))].sort();
-  let list=all.filter(a=>(bl.closed||!isClosed(a))&&(!bl.sector||a.sector===bl.sector)&&(!bl.poc||a.poc===bl.poc));
+  const all=visible().filter(a=>!a.date);
+  const sectors=[...new Set(all.map(a=>a.sector).filter(Boolean))].sort();
+  let list=all.filter(a=>(bl.closed||!isClosed(a))&&(!bl.sector||a.sector===bl.sector));
   const q=bl.q.trim().toLowerCase();if(q)list=list.filter(a=>[a.title,a.context,a.sector,a.poc,a.timing].join(" ").toLowerCase().includes(q));
   list.sort((p,q2)=>weekKey(p.week)-weekKey(q2.week)||(p.sector||"").localeCompare(q2.sector||""));
   const p=document.createElement("aside");p.className="backlog";p.dataset.date="";
   p.innerHTML=`<header><h3>To schedule</h3><span class="pill">${list.length}</span></header>
    <div class="blf"><input type="search" id="blq" placeholder="Search" value="${esc(bl.q)}">
    <select id="bls"><option value="">All sectors</option>${sectors.map(s=>`<option ${s===bl.sector?"selected":""}>${esc(s)}</option>`).join("")}</select>
-   <select id="blp"><option value="">All POCs</option>${pocs.map(s=>`<option ${s===bl.poc?"selected":""}>${esc(s)}</option>`).join("")}</select>
    <label class="small"><input type="checkbox" id="blc" ${bl.closed?"checked":""}> Show done</label></div>`;
   const box=document.createElement("div");box.className="blist";let wk=null;
   list.forEach(a=>{const w=a.week||"No target week";if(w!==wk){wk=w;box.insertAdjacentHTML("beforeend",`<div class="blwk">${esc(w)}</div>`)}
-    const c=document.createElement("button");c.type="button";c.className="chip bl"+(a.type==="Event"?" ev":"")+(isClosed(a)?" closed":"");c.dataset.id=a.id;
-    c.innerHTML=`<span class="ct">${esc(a.title||"Untitled")}</span><span class="cm">${typeTag(a)} ${esc([a.sector,a.poc].filter(Boolean).join(" · "))}</span>${a.timing?`<span class="cm">${esc(a.timing.split("\n")[0])}</span>`:""}<span class="fchips">${fmtChips(a)}</span>`;
+    const c=document.createElement("button");c.type="button";c.className="chip bl"+(a.type==="Event"?" ev":"")+(isCmPc(a)?" cmpc":"")+(isClosed(a)?" closed inactive":"");c.dataset.id=a.id;
+    c.innerHTML=`<span class="ct">${esc(a.title||"Untitled")}</span><span class="cm">${typeTag(a)} ${esc([a.sector,a.poc].filter(Boolean).join(" · "))}</span>${a.timing?`<span class="cm">${esc(a.timing.split("\n")[0])}</span>`:""}<span class="fchips">${fmtChips(a)}</span>${doneBox(a)}`;
     c.ondblclick=e=>{e.stopPropagation();openEdit(a.id)};c.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();openEdit(a.id)}};
-    attachDrag(c,a.id);box.append(c)});
+    wireDone(c,a);attachDrag(c,a.id);box.append(c)});
   if(!list.length)box.innerHTML=`<div class="empty small">Nothing here. Everything matching is on the calendar.</div>`;
   p.append(box);return p;
 }
 function wireBacklog(){
   const q=document.getElementById("blq");q.oninput=()=>{bl.q=q.value;clearTimeout(q._t);q._t=setTimeout(()=>{const pos=q.selectionStart;render();const n=document.getElementById("blq");n.focus();n.setSelectionRange(pos,pos)},250)};
   document.getElementById("bls").onchange=e=>{bl.sector=e.target.value;render()};
-  document.getElementById("blp").onchange=e=>{bl.poc=e.target.value;render()};
   document.getElementById("blc").onchange=e=>{bl.closed=e.target.checked;render()};
 }
 
@@ -443,7 +510,7 @@ function renderData(){
   const bar=document.createElement("div");bar.className="bar";
   bar.innerHTML=`<div class="left"><select id="dScope"><option value="month">${parse(state.month+"-01").toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</option><option value="upcoming">Today onwards</option><option value="unscheduled">To schedule (no date)</option><option value="all">All entries</option></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
   vw.append(bar);
-  let rows=state.acts.slice();
+  let rows=visible();
   if(state.dataScope==="month")rows=rows.filter(a=>a.date.slice(0,7)===state.month);
   if(state.dataScope==="upcoming")rows=rows.filter(a=>a.date>=TODAY);
   if(state.dataScope==="unscheduled")rows=rows.filter(a=>!a.date);
@@ -453,10 +520,10 @@ function renderData(){
   const w=document.createElement("div");w.className="tbl-wrap";
   w.innerHTML=`<table><thead><tr>${cols.map(c=>c.startsWith("ck:")?`<th class="ck">${esc(c.slice(3))}</th>`:`<th>${c}</th>`).join("")}</tr></thead><tbody></tbody></table>`;
   const tb=w.querySelector("tbody");
-  rows.forEach(a=>{const tr=document.createElement("tr");const p="r-"+a.id+"-";
+  rows.forEach(a=>{const tr=document.createElement("tr");if(isClosed(a))tr.className="inactive";else if(isCmPc(a))tr.className="cmpc";const p="r-"+a.id+"-";
     const st=k=>{const it=ITEMS.find(i=>i.k===k);return it.when(a)?sel(p+k,it.opts,v(a,it),stCls(a,it)):`<span class="muted small">n/a</span>`};
     const inp=(f,t,ph)=>`<input type="${t||"text"}" id="${p}${f}" value="${esc(a[f])}" ${ph?`placeholder="${ph}"`:""}>`;
-    tr.innerHTML=`<td class="w-date">${inp("date","date")}</td><td class="w-time">${inp("time","time")}</td><td class="w-type">${sel(p+"type",["PC","Event"],a.type)}</td>
+    tr.innerHTML=`<td class="w-date">${inp("date","date")}</td><td class="w-time">${inp("time","time")}</td><td class="w-type">${sel(p+"type",["PC","CM PC","Event"],typeOf(a))}</td>
       <td class="w-title">${inp("title")}</td><td class="w-mid">${inp("sector")}</td><td class="w-mid">${inp("poc")}</td>
       <td class="w-st">${sel(p+"status",OVERALL.includes(a.status)||!a.status?["",...OVERALL]:["",a.status,...OVERALL],a.status||"")}</td><td class="w-mid">${inp("week")}</td>
       ${FORMATS.map((f,i)=>`<td class="w-ck"><input type="checkbox" data-fmt="${esc(f)}" id="${p}fmt${i}" aria-label="${esc(f)}" ${hasFmt(a,f)?"checked":""}></td>`).join("")}<td class="w-mid">${inp("minister")}</td><td class="w-mid">${inp("venue")}</td>
@@ -468,7 +535,7 @@ function renderData(){
       <td><button class="x" type="button" data-open>Open</button></td>`;
     tr.querySelectorAll("input,select").forEach(el=>{const f=el.id.slice(p.length);
       if(el.dataset.fmt){el.addEventListener("change",()=>patch(a.id,toggleFmt(state.acts.find(x=>x.id===a.id),el.dataset.fmt,el.checked)));return}
-      el.addEventListener("change",()=>{const val=el.value.trim();const extra=f==="printAd"?{formats:toggleFmt(a,"Print ad",val!=="None").formats}:{};patch(a.id,{[f]:val,...extra})})});
+      el.addEventListener("change",()=>{const val=el.value.trim();if(f==="type"){patch(a.id,typePatch(state.acts.find(x=>x.id===a.id),val));return}const extra=f==="printAd"?{formats:toggleFmt(a,"Print ad",val!=="None").formats}:{};patch(a.id,{[f]:val,...extra})})});
     tr.querySelector("[data-open]").onclick=()=>openEdit(a.id);tb.append(tr)});
   vw.append(w);
   if(!rows.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No entries ${state.dataScope==="month"?"this month":"here"} yet. Use “+ Add row” or double-click a day on the calendar.</div>`);
@@ -486,7 +553,7 @@ function renderPending(){
   vw.insertAdjacentHTML("beforeend",`<div class="small muted">Everything still marked Pending, oldest first. Change the status here and it saves straight away. Click a heading to open the entry.</div>`);
   const g=document.createElement("div");g.className="pgrid";
   ITEMS.forEach(it=>{
-    const list=state.acts.filter(a=>a.date&&it.when(a)&&isOpen(a,it)).map(a=>({a,due:addDays(a.date,it.off)})).sort((p,q)=>p.due.localeCompare(q.due));
+    const list=visible().filter(a=>a.date&&!isClosed(a)&&it.when(a)&&isOpen(a,it)).map(a=>({a,due:addDays(a.date,it.off)})).sort((p,q)=>p.due.localeCompare(q.due));
     const col=document.createElement("section");col.className="pcol";
     col.innerHTML=`<header><h3>${esc(it.label)}</h3><span class="pill ${list.length?"":"zero"}">${it.owner?esc(it.owner)+" · ":""}${list.length}</span></header>`;
     if(!list.length)col.insertAdjacentHTML("beforeend",`<div class="empty small">All clear.</div>`);
@@ -501,7 +568,7 @@ function renderPending(){
 /* ---------- Entry dialog ---------- */
 const dlg=document.getElementById("dlg"),body=document.getElementById("dlgBody");
 let openId=null,isNew=false,draft=null;
-function openNew(date){if(!cfg)return;draft=blank("PC",date);isNew=true;openId=null;drawDialog();dlg.showModal();setTimeout(()=>{const t=document.getElementById("fTitle");t&&t.focus()},30)}
+function openNew(date){if(!cfg)return;draft=blank("PC",date);if(state.pcf==="cm")draft.formats="CM level";isNew=true;openId=null;drawDialog();dlg.showModal();setTimeout(()=>{const t=document.getElementById("fTitle");t&&t.focus()},30)}
 function openEdit(id){if(!state.acts.find(x=>x.id===id))return;isNew=false;openId=id;draft=null;drawDialog();if(!dlg.open)dlg.showModal()}
 function cur(){return isNew?draft:state.acts.find(x=>x.id===openId)}
 function setField(k,val){if(isNew){draft[k]=val;if(k==="type"||k==="printAd"||ITEMS.some(i=>i.k===k))drawDialog();return}patch(openId,{[k]:val});drawDialog()}
@@ -511,7 +578,7 @@ function drawDialog(){
   applicable(a).forEach(it=>{if(it.phase!==phase){phase=it.phase;items+=`<div class="phase">${phase}</div>`}
     const s=stateOf(a,it);
     items+=`<div class="srow"><div class="sl">${esc(it.label)}<small>${it.owner?esc(it.owner)+" · ":""}${it.off===0?"on the day":it.off<0?"before the day":"day after"}${s==="late"?' · <span class="lateword">overdue</span>':""}</small></div>${sel("s-"+it.k,it.opts,v(a,it),"s-"+s)}${it.link?`<div class="lk"><input type="text" id="l-${it.k}" placeholder="Paste report link or reference" value="${esc(a[it.link]||"")}"></div>`:""}</div>`});
-  body.innerHTML=`<div class="dhd"><div class="typesw" role="group" aria-label="Type"><button type="button" data-t="PC" aria-pressed="${a.type==="PC"}">PC</button><button type="button" data-t="Event" aria-pressed="${a.type==="Event"}">Event</button></div><button class="btn sm" type="button" id="dClose">Close</button></div>
+  body.innerHTML=`<div class="dhd"><div class="typesw" role="group" aria-label="Type"><button type="button" data-t="PC" aria-pressed="${typeOf(a)==="PC"}">PC</button><button type="button" data-t="CM PC" aria-pressed="${typeOf(a)==="CM PC"}">CM PC</button><button type="button" data-t="Event" aria-pressed="${typeOf(a)==="Event"}">Event</button></div><div style="display:flex;gap:8px">${isNew?"":`<button class="btn sm ${isDoneSt(a)?"":"doneb"}" type="button" id="dDone">${isDoneSt(a)?"Reopen":"Mark as Done"}</button>`}<button class="btn sm" type="button" id="dClose">Close</button></div></div>
   <div class="form">
     <label class="full">Heading<input type="text" class="title-in" id="fTitle" value="${esc(a.title)}" placeholder="${a.type==="PC"?"What is the PC about":"Event name"}"></label>
     <label title="Leave empty to keep it in the To schedule list">Date (optional)<input type="date" id="fDate" value="${a.date||""}"></label>
@@ -534,7 +601,8 @@ function drawDialog(){
   <div class="form"><label class="full">Remarks<textarea id="fRem">${esc(a.remarks)}</textarea></label></div>
   <div class="foot">${isNew?`<span class="small muted">You can change everything later.</span><button class="btn primary" type="button" id="dSave">Add to calendar</button>`:`<button class="btn sm" type="button" id="dDel">Delete</button><span class="small muted">Changes save as you go.</span>`}</div><div id="cf"></div>`;
   body.querySelector("#dClose").onclick=()=>dlg.close();
-  body.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>setField("type",b.dataset.t));
+  const dDone=body.querySelector("#dDone");if(dDone)dDone.onclick=()=>toggleDone(openId);
+  body.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const p=typePatch(cur(),b.dataset.t);if(isNew)Object.assign(draft,p);else patch(openId,p);drawDialog()});
   const map={fTitle:"title",fDate:"date",fTime:"time",fMin:"minister",fVenue:"venue",fDist:"district",fAd:"printAd",fCtx:"context",fRem:"remarks",fSec:"sector",fPoc:"poc",fSt:"status",fWk:"week",fTim:"timing"};
   Object.entries(map).forEach(([id,k])=>{const el=body.querySelector("#"+id);el.addEventListener("change",()=>setField(k,el.value.trim()))});
   body.querySelectorAll(".spb").forEach(b=>b.onclick=()=>{const on=b.getAttribute("aria-pressed")!=="true";const p=toggleFmt(cur(),b.dataset.f,on);
@@ -583,6 +651,8 @@ document.getElementById("btnExport").onclick=exportExcel;
 
 /* ---------- Start ---------- */
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{state.view=b.dataset.v;render()});
+document.querySelectorAll("#pcTabs button").forEach(b=>b.onclick=()=>{state.pcf=b.dataset.f;render()});
+document.getElementById("pocF").onchange=e=>{state.poc=e.target.value;render()};
 if(cfg){main.innerHTML=`<div class="empty">Loading the calendar from the Google Sheet…</div>`;refresh()}else{setConn("Not connected","bad");showSetup()}
 setInterval(()=>{if(document.visibilityState==="visible")refresh()},30000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refresh()});
