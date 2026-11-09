@@ -133,7 +133,7 @@ th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertic
 th{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--soft);white-space:nowrap;position:sticky;top:0;z-index:1}
 tbody tr:hover{background:var(--soft)}
 td input,td select{width:100%;font-size:.86rem;padding:4px 5px}
-td.w-date{min-width:140px}td.w-time{min-width:100px}td.w-title{min-width:220px}td.w-mid{min-width:140px}td.w-st{min-width:118px}td.w-link{min-width:160px}
+td.w-type{min-width:92px}td.w-date{min-width:140px}td.w-time{min-width:100px}td.w-title{min-width:220px}td.w-mid{min-width:140px}td.w-st{min-width:118px}td.w-link{min-width:160px}
 select.s-done{background:var(--ok-bg);color:var(--ok);border-color:transparent;font-weight:600}
 select.s-open{background:var(--wait-bg);color:var(--wait);border-color:transparent;font-weight:600}
 select.s-late{background:var(--late-bg);color:var(--late);border-color:transparent;font-weight:600}
@@ -179,6 +179,18 @@ dialog::backdrop{background:rgba(15,23,35,.5)}
 .foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
 .confirm{border:1px solid var(--late);background:var(--late-bg);padding:10px;border-radius:var(--r);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .btn.danger{background:var(--late);border-color:var(--late);color:#fff}
+
+/* sub-parts toggles */
+.subparts{display:grid;gap:8px}
+.sp{display:flex;flex-wrap:wrap;gap:8px}
+.spb{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:6px 13px;font-weight:600;font-size:.92rem}
+.spb .tick{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line);display:inline-grid;place-items:center;font-size:.72rem;line-height:1}
+.spb[aria-pressed="true"]{background:var(--pc-bg);border-color:var(--pc);color:var(--pc)}
+.spb[aria-pressed="true"] .tick{background:var(--pc);border-color:var(--pc);color:#fff}
+.spb[aria-pressed="true"] .tick::after{content:"✓"}
+td.w-ck{text-align:center;min-width:64px}
+td.w-ck input{width:18px;height:18px;accent-color:var(--pc)}
+th.ck{text-align:center;white-space:normal;min-width:64px;line-height:1.2}
 
 /* setup */
 .setup{max-width:620px;margin:20px auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px;display:grid;gap:12px}
@@ -357,6 +369,14 @@ const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,d
 function weekKey(w){const m=String(w||"").match(/(\d)\w*\s+week\s+(\w{3})/i);if(m){let mo=MON[m[2].toLowerCase()]||0;if(mo<7)mo+=12;return mo*10+Number(m[1])}
   if(/anytime/i.test(w))return 900;if(/inaugurated/i.test(w))return 990;return 950}
 const FMT_SHORT={"CM level":"CM","PC":"PC","Minister site visit":"Site visit","Event with Minister":"Event","Op-ed":"Op-ed","Print ad":"Ad","Beneficiary interaction":"Beneficiaries"};
+/* Sub-parts of an activity (the Yes/No columns of the Media Calendar), stored as a comma list in "formats" */
+const FORMATS=["CM level","PC","Minister site visit","Event with Minister","Op-ed","Print ad","Beneficiary interaction"];
+function fmtList(a){return (a.formats||"").split(",").map(s=>s.trim()).filter(Boolean)}
+function hasFmt(a,f){return fmtList(a).includes(f)}
+function toggleFmt(a,f,on){const cur=fmtList(a).filter(x=>x!==f);if(on)cur.push(f);
+  const p={formats:FORMATS.filter(x=>cur.includes(x)).concat(cur.filter(x=>!FORMATS.includes(x))).join(", ")};
+  if(f==="Print ad"){if(on&&(!a.printAd||a.printAd==="None"))p.printAd="Size TBD";if(!on)p.printAd="None"}
+  return p}
 function fmtChips(a){return (a.formats||"").split(",").map(s=>s.trim()).filter(Boolean).map(f=>`<span class="fchip">${esc(FMT_SHORT[f]||f)}</span>`).join("")}
 function backlogPanel(){
   const all=state.acts.filter(a=>!a.date);
@@ -429,23 +449,26 @@ function renderData(){
   if(state.dataScope==="unscheduled")rows=rows.filter(a=>!a.date);
   const q=state.q.trim().toLowerCase();if(q)rows=rows.filter(a=>[a.title,a.venue,a.minister,a.district,a.context,a.sector,a.poc].join(" ").toLowerCase().includes(q));
   rows.sort((p,q2)=>(p.date+(p.time||"")).localeCompare(q2.date+(q2.time||"")));
-  const cols=["Date","Time","Type","Heading","Sector","POC","Status","Target week","Minister / Dept","Venue","Print ad","One pager","Ad coord.","Calendar posted","Live","Bytes","PR (Pritam)","Digital (AJ)","Digital link","Social (Akash)","Social link",""];
+  const cols=["Date","Time","Type","Heading","Sector","POC","Status","Target week",...FORMATS.map(f=>"ck:"+(FMT_SHORT[f]==="Event"?"Event w/ Minister":f)),"Minister / Dept","Venue","Print ad size","One pager","Ad coord.","Calendar posted","Live","Bytes","PR (Pritam)","Digital (AJ)","Digital link","Social (Akash)","Social link",""];
   const w=document.createElement("div");w.className="tbl-wrap";
-  w.innerHTML=`<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody></tbody></table>`;
+  w.innerHTML=`<table><thead><tr>${cols.map(c=>c.startsWith("ck:")?`<th class="ck">${esc(c.slice(3))}</th>`:`<th>${c}</th>`).join("")}</tr></thead><tbody></tbody></table>`;
   const tb=w.querySelector("tbody");
   rows.forEach(a=>{const tr=document.createElement("tr");const p="r-"+a.id+"-";
     const st=k=>{const it=ITEMS.find(i=>i.k===k);return it.when(a)?sel(p+k,it.opts,v(a,it),stCls(a,it)):`<span class="muted small">n/a</span>`};
     const inp=(f,t,ph)=>`<input type="${t||"text"}" id="${p}${f}" value="${esc(a[f])}" ${ph?`placeholder="${ph}"`:""}>`;
-    tr.innerHTML=`<td class="w-date">${inp("date","date")}</td><td class="w-time">${inp("time","time")}</td><td>${sel(p+"type",["PC","Event"],a.type)}</td>
+    tr.innerHTML=`<td class="w-date">${inp("date","date")}</td><td class="w-time">${inp("time","time")}</td><td class="w-type">${sel(p+"type",["PC","Event"],a.type)}</td>
       <td class="w-title">${inp("title")}</td><td class="w-mid">${inp("sector")}</td><td class="w-mid">${inp("poc")}</td>
-      <td class="w-st">${sel(p+"status",OVERALL.includes(a.status)||!a.status?["",...OVERALL]:["",a.status,...OVERALL],a.status||"")}</td><td class="w-mid">${inp("week")}</td><td class="w-mid">${inp("minister")}</td><td class="w-mid">${inp("venue")}</td>
+      <td class="w-st">${sel(p+"status",OVERALL.includes(a.status)||!a.status?["",...OVERALL]:["",a.status,...OVERALL],a.status||"")}</td><td class="w-mid">${inp("week")}</td>
+      ${FORMATS.map((f,i)=>`<td class="w-ck"><input type="checkbox" data-fmt="${esc(f)}" id="${p}fmt${i}" aria-label="${esc(f)}" ${hasFmt(a,f)?"checked":""}></td>`).join("")}<td class="w-mid">${inp("minister")}</td><td class="w-mid">${inp("venue")}</td>
       <td class="w-st">${sel(p+"printAd",ADS,a.printAd||"None")}</td>
       <td class="w-st">${st("onePager")}</td><td class="w-st">${st("adCoord")}</td><td class="w-st">${st("calendarPosted")}</td>
       <td class="w-st">${st("live")}</td><td class="w-st">${st("bytes")}</td><td class="w-st">${st("pr")}</td>
       <td class="w-st">${st("digital")}</td><td class="w-link">${inp("digitalLink","text","Link")}</td>
       <td class="w-st">${st("social")}</td><td class="w-link">${inp("socialLink","text","Link")}</td>
       <td><button class="x" type="button" data-open>Open</button></td>`;
-    tr.querySelectorAll("input,select").forEach(el=>{const f=el.id.slice(p.length);el.addEventListener("change",()=>patch(a.id,{[f]:el.value.trim()}))});
+    tr.querySelectorAll("input,select").forEach(el=>{const f=el.id.slice(p.length);
+      if(el.dataset.fmt){el.addEventListener("change",()=>patch(a.id,toggleFmt(state.acts.find(x=>x.id===a.id),el.dataset.fmt,el.checked)));return}
+      el.addEventListener("change",()=>{const val=el.value.trim();const extra=f==="printAd"?{formats:toggleFmt(a,"Print ad",val!=="None").formats}:{};patch(a.id,{[f]:val,...extra})})});
     tr.querySelector("[data-open]").onclick=()=>openEdit(a.id);tb.append(tr)});
   vw.append(w);
   if(!rows.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No entries ${state.dataScope==="month"?"this month":"here"} yet. Use “+ Add row” or double-click a day on the calendar.</div>`);
@@ -503,15 +526,20 @@ function drawDialog(){
     <label>Overall status<select id="fSt">${(OVERALL.includes(a.status)||!a.status?["",...OVERALL]:["",a.status,...OVERALL]).map(o=>`<option value="${esc(o)}" ${o===(a.status||"")?"selected":""}>${esc(o||"Not set")}</option>`).join("")}</select></label>
     <label>Target week<input type="text" id="fWk" value="${esc(a.week)}" placeholder="e.g. 2nd week Nov"></label>
     <label class="full">Timing note<textarea id="fTim" style="min-height:40px">${esc(a.timing)}</textarea></label>
-    <label class="full">Suggested formats <span style="font-weight:400">(comma separated)</span><input type="text" id="fFmt" value="${esc(a.formats)}" placeholder="CM level, PC, Minister site visit, Event with Minister, Op-ed, Print ad, Beneficiary interaction"></label>
   </div>
+  <div class="subparts"><div class="phase">What this activity needs</div>
+    <div class="sp" role="group" aria-label="What this activity needs">${FORMATS.map((f,i)=>`<button type="button" class="spb" id="sp-${i}" data-f="${esc(f)}" aria-pressed="${hasFmt(a,f)}"><span class="tick" aria-hidden="true"></span>${esc(f)}</button>`).join("")}</div>
+    <div class="small muted">Tap to switch each one on or off. Print ad also sets the Print ad field above.</div></div>
   <div>${items}</div>
   <div class="form"><label class="full">Remarks<textarea id="fRem">${esc(a.remarks)}</textarea></label></div>
   <div class="foot">${isNew?`<span class="small muted">You can change everything later.</span><button class="btn primary" type="button" id="dSave">Add to calendar</button>`:`<button class="btn sm" type="button" id="dDel">Delete</button><span class="small muted">Changes save as you go.</span>`}</div><div id="cf"></div>`;
   body.querySelector("#dClose").onclick=()=>dlg.close();
   body.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>setField("type",b.dataset.t));
-  const map={fTitle:"title",fDate:"date",fTime:"time",fMin:"minister",fVenue:"venue",fDist:"district",fAd:"printAd",fCtx:"context",fRem:"remarks",fSec:"sector",fPoc:"poc",fSt:"status",fWk:"week",fTim:"timing",fFmt:"formats"};
+  const map={fTitle:"title",fDate:"date",fTime:"time",fMin:"minister",fVenue:"venue",fDist:"district",fAd:"printAd",fCtx:"context",fRem:"remarks",fSec:"sector",fPoc:"poc",fSt:"status",fWk:"week",fTim:"timing"};
   Object.entries(map).forEach(([id,k])=>{const el=body.querySelector("#"+id);el.addEventListener("change",()=>setField(k,el.value.trim()))});
+  body.querySelectorAll(".spb").forEach(b=>b.onclick=()=>{const on=b.getAttribute("aria-pressed")!=="true";const p=toggleFmt(cur(),b.dataset.f,on);
+    if(isNew){Object.assign(draft,p);drawDialog()}else{patch(openId,p);drawDialog()}const n=document.getElementById(b.id);n&&n.focus()});
+  body.querySelector("#fAd").addEventListener("change",e=>{const a2=cur();const want=e.target.value!=="None";if(want!==hasFmt(a2,"Print ad")){const p=toggleFmt(a2,"Print ad",want);delete p.printAd;if(isNew)Object.assign(draft,p);else patch(openId,p);drawDialog()}});
   applicable(a).forEach(it=>{body.querySelector("#s-"+it.k).onchange=e=>setField(it.k,e.target.value);if(it.link)body.querySelector("#l-"+it.k).onchange=e=>setField(it.link,e.target.value.trim())});
   if(isNew)body.querySelector("#dSave").onclick=()=>{Object.entries(map).forEach(([id,k])=>draft[k]=body.querySelector("#"+id).value.trim());
     if(!draft.title){const t=body.querySelector("#fTitle");t.focus();t.placeholder="Add a heading first";return}
