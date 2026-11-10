@@ -301,7 +301,7 @@ const DEFAULT_SHEET="https://docs.google.com/spreadsheets/d/1emGY4R9dw5iLTGekdcr
 function loadCfg(){try{return JSON.parse(localStorage.getItem(CFG)||"null")}catch(e){return null}}
 function storeCfg(c){try{localStorage.setItem(CFG,JSON.stringify(c))}catch(e){}}
 /* Put the part of the team link after #setup= between the quotes to open the dashboard to everyone with the plain link. Anyone can then view and edit. */
-const TEAM_CODE="";
+const TEAM_CODE="aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J4MW56Z3Qwd25wUWI3RFhSdFptcVpJUXlpUDhEVVBYNE5kaXdNbTY0WWU4MnJBTEFHZFNwYzFoc1NXOTRqN0FlXzMvZXhlY3xwbWQtSWlZWmVJaG5GM21OR2Vkcw";
 function fromCode(c){try{const [api,k]=atob(c.replace(/-/g,"+").replace(/_/g,"/")).split("|");return api&&k?{api,k,sheet:DEFAULT_SHEET}:null}catch(e){return null}}
 const OPEN_CFG=TEAM_CODE?fromCode(TEAM_CODE):null;
 let cfg=OPEN_CFG||loadCfg();
