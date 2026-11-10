@@ -300,7 +300,9 @@ const DEFAULT_API="https://script.google.com/macros/s/AKfycbx1nzgt0wnpQb7DXRtZmq
 const DEFAULT_SHEET="https://docs.google.com/spreadsheets/d/1emGY4R9dw5iLTGekdcrNFrh5nmiKW-CsbgMQHidHoYQ/edit";
 function loadCfg(){try{return JSON.parse(localStorage.getItem(CFG)||"null")}catch(e){return null}}
 function storeCfg(c){try{localStorage.setItem(CFG,JSON.stringify(c))}catch(e){}}
-let cfg=loadCfg();
+/* Put the desk key between the quotes to open the dashboard to everyone with the plain link. Anyone can then view and edit. */
+const DESK_KEY="";
+let cfg=DESK_KEY?{api:DEFAULT_API,k:DESK_KEY,sheet:DEFAULT_SHEET}:loadCfg();
 (function readHash(){const m=location.hash.match(/setup=([A-Za-z0-9_\-]+)/);if(!m)return;
   try{const s=atob(m[1].replace(/-/g,"+").replace(/_/g,"/"));const [api,k]=s.split("|");if(api&&k){cfg={api,k,sheet:DEFAULT_SHEET};storeCfg(cfg)}}catch(e){}
   history.replaceState(null,"",location.pathname+location.search)})();
@@ -637,7 +639,7 @@ function showSetup(msg){
 }
 
 /* ---------- Share and export ---------- */
-document.getElementById("btnShare").onclick=async()=>{if(!cfg){toast("Connect to the Sheet first.");return}const link=teamLink();
+document.getElementById("btnShare").onclick=async()=>{if(!cfg){toast("Connect to the Sheet first.");return}const link=DESK_KEY?location.origin+location.pathname:teamLink();
   try{await navigator.clipboard.writeText(link);toast("Team link copied. Anyone with it can view and edit.")}catch(e){prompt("Copy this team link:",link)}};
 function exportExcel(){
   if(typeof XLSX==="undefined"){toast("The Excel library did not load. Reload the page and try again.");return}
