@@ -396,9 +396,11 @@ function toast(msg,undo){const t=document.getElementById("toast");t.innerHTML=""
   t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,undo?5000:2400)}
 function setConn(text,kind){const c=document.getElementById("conn");c.className="conn "+(kind||"");c.querySelector("span").textContent=text}
 
+const saveSeq={};let seqN=0;
 function queue(body){
   pendingWrites++;setConn("Saving…");
-  writeChain=writeChain.then(()=>apiPost(body)).then(r=>{if(!r||r.error)throw new Error(r&&r.error||"failed")})
+  const rid=body.op==="save"&&body.row&&body.row.id,my=++seqN;if(rid)saveSeq[rid]=my;
+  writeChain=writeChain.then(()=>rid&&saveSeq[rid]!==my?{ok:true}:apiPost(body)).then(r=>{if(!r||r.error)throw new Error(r&&r.error||"failed")})
     .catch(()=>{toast("Could not save to the Sheet. Check your connection; your last change may be lost.");setConn("Last change not saved","bad")})
     .finally(()=>{pendingWrites--;if(!pendingWrites){setConn("Saved to Google Sheet","ok");setTimeout(refresh,800)}});
 }
@@ -406,19 +408,27 @@ function queue(body){
 function clean(a){const o={};FIELDS.forEach(f=>{const x=String(a[f]??"");o[f]=x&&f!=="id"?"'"+x:x});return o}
 function normDate(s){s=String(s||"").trim();if(!s||/^\d{4}-\d{2}-\d{2}$/.test(s))return s;const d=new Date(s);return isNaN(d)?s:iso(d)}
 function normTime(s){s=String(s||"").trim();if(!s||/^\d{1,2}:\d{2}$/.test(s))return s;const m=s.match(/(\d{1,2}):(\d{2}):\d{2}/);return m?m[1].padStart(2,"0")+":"+m[2]:s}
-function save(a){a.updatedAt=new Date().toISOString();const i=state.acts.findIndex(x=>x.id===a.id);if(i>=0)state.acts[i]=a;else state.acts.push(a);render();queue({op:"save",row:clean(a)})}
+function save(a){a.updatedAt=new Date().toISOString();const i=state.acts.findIndex(x=>x.id===a.id);if(i>=0)state.acts[i]=a;else state.acts.push(a);if(i>=0&&!dlg.open&&quickRow(a))drawChrome();else render();queue({op:"save",row:clean(a)})}
 function patch(id,p){const a=state.acts.find(x=>x.id===id);if(!a)return;save({...a,...p})}
 function remove(id){state.acts=state.acts.filter(a=>a.id!==id);render();queue({op:"delete",id})}
 function blank(type,date){const a={id:uid(type==="PC"?"pc":"ev"),type,date:date||TODAY,time:"",title:"",minister:"",venue:"",district:"",context:"",printAd:"None",digitalLink:"",socialLink:"",remarks:"",createdAt:new Date().toISOString()};
   return a}
 
+let lastSig="",rowSigs=new Map();
 async function refresh(){
   if(!cfg||pendingWrites||(drag&&drag.active))return;
   try{const r=await apiGet();if(r.error==="key"){setConn("Wrong desk key","bad");if(!loaded)showSetup("The desk key was not accepted. Check it and try again.");return}
     if(pendingWrites)return;
+    const sig=JSON.stringify(r.acts||[]);
+    if(loaded&&sig===lastSig){setConn("Connected to Google Sheet","ok");return}
+    lastSig=sig;
     const allRows=(r.acts||[]).filter(a=>a.id).map(a=>({...a,date:normDate(a.date),time:normTime(a.time)}));
-    state.tvc=allRows.filter(a=>a.type==="TVC");state.acts=allRows.filter(a=>a.type!=="TVC");state.briefs=r.briefs||{};
+    const newActs=allRows.filter(a=>a.type!=="TVC"),newSigs=new Map(newActs.map(a=>[a.id,JSON.stringify(a)]));
+    let sameSet=newActs.length===state.acts.length&&newActs.every(a=>rowSigs.has(a.id));const changed=sameSet?newActs.filter(a=>rowSigs.get(a.id)!==newSigs.get(a.id)):[];
+    rowSigs=newSigs;state.tvc=allRows.filter(a=>a.type==="TVC");state.acts=newActs;state.briefs=r.briefs||{};
     const first=!loaded;loaded=true;setConn("Connected to Google Sheet","ok");
+    if(!first&&sameSet&&state.view==="data"&&!dlg.open&&changed.length<=25){
+      const f=document.activeElement;changed.forEach(a=>{const old=document.getElementById("r-"+a.id+"-week");const tr=old&&old.closest("tr");if(tr&&!(f&&tr.contains(f)))quickRow(a)});drawChrome();return}
     if(first||!busyTyping())render()}
   catch(e){setConn(loaded?"Offline. Showing last loaded data":"Can't reach the Google Sheet","bad");if(!loaded)showSetup("Could not reach the Sheet. Check the Web app URL, and that it is deployed with access for Anyone.")}
 }
@@ -428,15 +438,18 @@ function busyTyping(){const f=document.activeElement;return f&&(f.tagName==="INP
 const main=document.getElementById("main");
 function render(){
   if(!cfg)return showSetup();
-  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===state.view));
-  document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,b.dataset.f)).length});
-  drawPocFilter();drawWeekFilter();
-  const n=visible().filter(a=>a.date&&!isClosed(a)).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length+FORMATS.filter(f=>hasFmt(a,f)&&!fmtDone(a,f)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
+  drawChrome();
   const keep=document.activeElement&&document.activeElement.id&&main.contains(document.activeElement)?document.activeElement.id:null;
   document.body.classList.toggle("tvcview",state.view==="tvc");
   ({calendar:renderCal,data:renderData,pending:renderPending,tvc:renderTvc})[state.view]();
   if(keep){const el=document.getElementById(keep);if(el)el.focus()}
   if(openId&&dlg.open)refreshDialog();
+}
+function drawChrome(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===state.view));
+  document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,b.dataset.f)).length});
+  drawPocFilter();drawWeekFilter();
+  const n=visible().filter(a=>a.date&&!isClosed(a)).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length+FORMATS.filter(f=>hasFmt(a,f)&&!fmtDone(a,f)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
 }
 function marksHTML(a){return `<span class="marks">${CHIP_MARKS.map(k=>{const it=ITEMS.find(i=>i.k===k);return `<span class="mk ${stateOf(a,it)}" title="${esc(it.label)}: ${esc(OPT_LABEL[v(a,it)]||v(a,it))}">${it.short}</span>`}).join("")}</span>`}
 function isDoneSt(a){return /^done$/i.test(a.status||"")}
@@ -655,7 +668,23 @@ function renderData(){
   const w=document.createElement("div");w.className="tbl-wrap";
   w.innerHTML=`<table><thead><tr>${cols.map(c=>c.startsWith("ck:")?`<th class="ck">${esc(c.slice(3))}</th>`:`<th>${c}</th>`).join("")}</tr></thead><tbody></tbody></table>`;
   const tb=w.querySelector("tbody");
-  rows.forEach(a=>{const tr=document.createElement("tr");if(isClosed(a))tr.className="inactive";else if(isCmPc(a))tr.className="cmpc";const p="r-"+a.id+"-";
+  rows.forEach(a=>tb.append(dataRow(a)));
+  vw.append(w);
+  if(!rows.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No entries ${state.dataScope==="month"?"this month":"here"} yet. Use “+ Add row” or double-click a day on the calendar.</div>`);
+  else vw.insertAdjacentHTML("beforeend",`<div class="small muted">Each change saves to the Google Sheet when you leave the cell. Changes made by others, or directly in the Sheet, show up here within about 20 seconds.</div>`);
+  main.append(vw);
+  drawWeekFilter();if(wkOpen)vw.querySelector(".bar .wkf").open=true;
+  const ds=document.getElementById("dStat");ds.innerHTML=`<option value="">Pending and done (${stTot})</option><option value="pending">Pending (${stN.pending})</option><option value="done">Done (${stN.done})</option>`;ds.value=state.dstat;ds.onchange=()=>{state.dstat=ds.value;render()};
+  const dq=document.getElementById("dq");dq.oninput=()=>{state.q=dq.value;clearTimeout(dq._t);dq._t=setTimeout(()=>{const pos=dq.selectionStart;renderData();const n=document.getElementById("dq");n.focus();n.setSelectionRange(pos,pos)},250)};
+  document.getElementById("dAdd").onclick=()=>openNew(state.dataScope==="month"&&state.month!==TODAY.slice(0,7)?state.month+"-01":TODAY);
+  if(cfg.sheet){const l=document.getElementById("sheetLink");l.href=cfg.sheet;l.hidden=false}
+}
+/* Replace one row of the Data table in place. Returns false when the row is not on screen. */
+function quickRow(a){if(state.view!=="data")return false;const old=document.getElementById("r-"+a.id+"-week");const tr=old&&old.closest("tr");if(!tr)return false;
+  const f=document.activeElement,fid=f&&tr.contains(f)?f.id:null,sel0=fid&&"selectionStart"in f?[f.selectionStart,f.selectionEnd]:null;
+  const nt=dataRow(a);tr.replaceWith(nt);
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();if(sel0)try{el.setSelectionRange(sel0[0],sel0[1])}catch(e){}}}return true}
+function dataRow(a){const tr=document.createElement("tr");if(isClosed(a))tr.className="inactive";else if(isCmPc(a))tr.className="cmpc";const p="r-"+a.id+"-";
     const inp=(f,t,ph)=>`<input type="${t||"text"}" id="${p}${f}" data-f="${f}" value="${esc(a[f])}" ${ph?`placeholder="${ph}"`:""}>`;
     const ta=(f,cls,rows,ph)=>`<textarea class="wrap ${cls||""}" rows="${rows}" id="${p}${f}" data-f="${f}" ${ph?`placeholder="${ph}"`:""}>${esc(a[f])}</textarea>`;
     tr.innerHTML=`<td class="w-tp">${sel(p+"type",["PC","CM PC","Event"],typeOf(a),"tsel t-"+(typeOf(a)==="CM PC"?"cm":typeOf(a)==="Event"?"ev":"pc"))}</td><td class="w-wk">${inp("week","text","e.g. 3rd week Nov")}</td><td class="w-date">${inp("date","date")}</td>
@@ -672,17 +701,7 @@ function renderData(){
     tr.querySelector("[data-open]").onclick=()=>openEdit(a.id);
     const del=tr.querySelector("[data-del]");del.onclick=()=>{if(!del.dataset.arm){del.dataset.arm="1";del.textContent="Confirm delete";del.classList.add("arm");setTimeout(()=>{if(del.isConnected){delete del.dataset.arm;del.textContent="Delete";del.classList.remove("arm")}},5000);return}
       const copy=structuredClone(get());remove(a.id);toast(`Deleted “${copy.title||"Untitled"}”`,()=>save(copy))};
-    tb.append(tr)});
-  vw.append(w);
-  if(!rows.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No entries ${state.dataScope==="month"?"this month":"here"} yet. Use “+ Add row” or double-click a day on the calendar.</div>`);
-  else vw.insertAdjacentHTML("beforeend",`<div class="small muted">Each change saves to the Google Sheet when you leave the cell. You can also edit the Sheet directly; changes show up here within a minute.</div>`);
-  main.append(vw);
-  drawWeekFilter();if(wkOpen)vw.querySelector(".bar .wkf").open=true;
-  const ds=document.getElementById("dStat");ds.innerHTML=`<option value="">Pending and done (${stTot})</option><option value="pending">Pending (${stN.pending})</option><option value="done">Done (${stN.done})</option>`;ds.value=state.dstat;ds.onchange=()=>{state.dstat=ds.value;render()};
-  const dq=document.getElementById("dq");dq.oninput=()=>{state.q=dq.value;clearTimeout(dq._t);dq._t=setTimeout(()=>{const pos=dq.selectionStart;renderData();const n=document.getElementById("dq");n.focus();n.setSelectionRange(pos,pos)},250)};
-  document.getElementById("dAdd").onclick=()=>openNew(state.dataScope==="month"&&state.month!==TODAY.slice(0,7)?state.month+"-01":TODAY);
-  if(cfg.sheet){const l=document.getElementById("sheetLink");l.href=cfg.sheet;l.hidden=false}
-}
+    return tr}
 
 /* ---------- TVC ----------
    TVC rows live in the Activities sheet with Type "TVC" and are kept out of the calendar, Pending and Data views.
@@ -860,7 +879,7 @@ document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{state.view=b
 document.querySelectorAll("#pcTabs button").forEach(b=>b.onclick=()=>{state.pcf=b.dataset.f;render()});
 document.getElementById("pocF").onchange=e=>{state.poc=e.target.value;render()};
 if(cfg){main.innerHTML=`<div class="empty">Loading the calendar from the Google Sheet…</div>`;refresh()}else{setConn("Not connected","bad");showSetup()}
-setInterval(()=>{if(document.visibilityState==="visible")refresh()},30000);
+setInterval(()=>{if(document.visibilityState==="visible")refresh()},15000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refresh()});
 </script>
 </body>
