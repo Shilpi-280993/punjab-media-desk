@@ -322,8 +322,8 @@ function dflt(it){return it.opts===LIVE3?"Not needed":"Pending"}
 function v(a,it){return a[it.k]||dflt(it)}
 function applicable(a){return ITEMS.filter(i=>i.when(a))}
 function isClosed(a){return /^(done|dropped)$/i.test(a.status||"")||/^inaugurated/i.test(a.week||"")}
-function stateOf(a,it){const x=v(a,it);if(x==="Pending")return a.date&&addDays(a.date,it.off)<TODAY?"late":"open";if(x==="NA"||x==="Not needed")return"na";return"done"}
-function isOpen(a,it){return v(a,it)==="Pending"}
+function stateOf(a,it){if(!itOn(a,it))return"na";const x=v(a,it);if(x==="Pending")return a.date&&addDays(a.date,it.off)<TODAY?"late":"open";if(x==="NA"||x==="Not needed")return"na";return"done"}
+function isOpen(a,it){return itOn(a,it)&&v(a,it)==="Pending"}
 function isLate(a){return !isClosed(a)&&applicable(a).some(it=>stateOf(a,it)==="late")}
 
 /* ---------- Dates ---------- */
