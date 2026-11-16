@@ -106,7 +106,7 @@ textarea{width:100%;min-height:60px}
 .chip.cmpc{border-left-color:var(--cm);background:var(--cm-bg)}
 .chip.late{border-color:var(--late);border-left-color:var(--late)}
 .chip:hover{filter:brightness(.98);box-shadow:0 1px 4px rgba(0,0,0,.12)}
-.chip .ct{padding-right:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .ct{padding-right:20px;font-weight:700;white-space:normal;overflow-wrap:anywhere}
 .chip .cm{color:var(--muted);font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip .dn{position:absolute;top:3px;right:3px;width:16px;height:16px;border:1.5px solid var(--na);border-radius:4px;display:grid;place-items:center;font-size:.68rem;line-height:1;color:transparent;background:var(--surface);cursor:pointer}
 .chip .dn:hover{border-color:var(--ok);color:var(--ok)}
@@ -173,7 +173,7 @@ select.s-na{background:var(--na-bg);color:var(--na);border-color:transparent}
 .prow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--soft)}
 .prow:first-of-type{border-top:none}
 .prow .pt{min-width:0;cursor:pointer}
-.prow .pt b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.93rem}
+.prow .pt b{display:block;white-space:normal;overflow-wrap:anywhere;font-size:.93rem}
 .prow small{color:var(--muted)}
 .prow select{font-size:.85rem;padding:3px 5px}
 .lateword{color:var(--late);font-weight:700}
@@ -404,7 +404,7 @@ function render(){
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===state.view));
   document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,b.dataset.f)).length});
   drawPocFilter();drawWeekFilter();
-  const n=visible().filter(a=>a.date&&!isClosed(a)).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
+  const n=visible().filter(a=>a.date&&!isClosed(a)).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length+FORMATS.filter(f=>hasFmt(a,f)&&!fmtDone(a,f)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
   const keep=document.activeElement&&document.activeElement.id&&main.contains(document.activeElement)?document.activeElement.id:null;
   ({calendar:renderCal,data:renderData,pending:renderPending})[state.view]();
   if(keep){const el=document.getElementById(keep);if(el)el.focus()}
@@ -659,8 +659,17 @@ function renderData(){
 /* ---------- Pending ---------- */
 function renderPending(){
   main.innerHTML="";const vw=document.createElement("div");vw.className="view";
-  vw.insertAdjacentHTML("beforeend",`<div class="small muted">Everything still marked Pending, oldest first. Change the status here and it saves straight away. Click a heading to open the entry.</div>`);
+  vw.insertAdjacentHTML("beforeend",`<div class="small muted">Everything still to follow up, oldest first: unticked requirements such as PC or Print ad, then the tracked follow-ups. Mark items done here and it saves straight away. Click a heading to open the entry.</div>`);
   const g=document.createElement("div");g.className="pgrid";
+  FORMATS.forEach(f=>{
+    const list=visible().filter(a=>a.date&&!isClosed(a)&&hasFmt(a,f)&&!fmtDone(a,f)).sort((p,q)=>p.date.localeCompare(q.date));if(!list.length)return;
+    const col=document.createElement("section");col.className="pcol";
+    col.innerHTML=`<header><h3>${esc(fmtLabel(f))}</h3><span class="pill">${list.length}</span></header>`;
+    list.forEach(a=>{const r=document.createElement("div");r.className="prow";const late=a.date<TODAY?daysBetween(a.date,TODAY):0;
+      r.innerHTML=`<div class="pt"><b>${esc(a.title||"Untitled")}</b><small>${typeTag(a)} ${fmt(a.date,{day:"numeric",month:"short"})}${late?` · <span class="lateword">${late} day${late>1?"s":""} late</span>`:""}</small></div><button class="btn sm" type="button">Mark done</button>`;
+      r.querySelector("button").onclick=()=>{patch(a.id,setFmtDone(a,f,true));toast(`${fmtLabel(f)} marked done`,()=>{const x=state.acts.find(y=>y.id===a.id);if(x)patch(a.id,setFmtDone(x,f,false))})};
+      r.querySelector(".pt").onclick=()=>openEdit(a.id);col.append(r)});
+    g.append(col)});
   ITEMS.forEach(it=>{
     const list=visible().filter(a=>a.date&&!isClosed(a)&&it.when(a)&&isOpen(a,it)).map(a=>({a,due:addDays(a.date,it.off)})).sort((p,q)=>p.due.localeCompare(q.due));
     const col=document.createElement("section");col.className="pcol";
