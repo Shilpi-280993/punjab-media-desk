@@ -384,7 +384,7 @@ function save(a){a.updatedAt=new Date().toISOString();const i=state.acts.findInd
 function patch(id,p){const a=state.acts.find(x=>x.id===id);if(!a)return;save({...a,...p})}
 function remove(id){state.acts=state.acts.filter(a=>a.id!==id);render();queue({op:"delete",id})}
 function blank(type,date){const a={id:uid(type==="PC"?"pc":"ev"),type,date:date||TODAY,time:"",title:"",minister:"",venue:"",district:"",context:"",printAd:"None",digitalLink:"",socialLink:"",remarks:"",createdAt:new Date().toISOString()};
-  ITEMS.forEach(it=>a[it.k]=dflt(it));return a}
+  return a}
 
 async function refresh(){
   if(!cfg||pendingWrites||(drag&&drag.active))return;
@@ -579,7 +579,8 @@ function sel(id,opts,cur,cls){return `<select id="${id}" class="${cls||""}">${op
 /* Requirements: activity formats (ticks kept in Suggested formats) plus the tracked follow-ups (kept in their own columns). */
 const REQ_IT={onePager:"One pager",adCoord:"Ad coordination",calendarPosted:"Calendar posted",live:"Live",bytes:"Bytes",pr:"PR",digital:"Digital report",social:"Social report"};
 const fmtLabel=f=>f==="Event with Minister"?"Minister event":f;
-function itOn(a,it){const x=v(a,it);return x!=="NA"&&x!=="Not needed"}
+/* A follow-up shows under Requirements only when its cell in the Sheet has been filled in. */
+function itOn(a,it){const x=String(a[it.k]||"").trim();return !!x&&x!=="NA"&&x!=="Not needed"}
 function itDone(a,it){return /^(done|received)$/i.test(v(a,it))}
 function reqList(a){const L=[],open=!isClosed(a);
   FORMATS.forEach(f=>{if(hasFmt(a,f)){const d=fmtDone(a,f);L.push({key:"fmt:"+f,label:fmtLabel(f),done:d,late:open&&!d&&!!a.date&&a.date<TODAY})}});
