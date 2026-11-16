@@ -51,6 +51,8 @@ button{cursor:pointer}
 .navrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
 .tabs{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
 .tabs button{border:none;background:none;padding:6px 16px;border-radius:999px;color:var(--muted);font-weight:600}
+.tabs .tablink{padding:6px 16px;border-radius:999px;color:var(--muted);font-weight:600;text-decoration:none;display:inline-flex;align-items:center}
+.tabs .tablink:hover{color:var(--fg);background:var(--surface)}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .tabs .count{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:999px;background:var(--wait-bg);color:var(--wait);font-size:.75rem}
 .navl{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -309,6 +311,7 @@ th.ck{text-align:center;white-space:normal;min-width:64px;line-height:1.2}
       <button role="tab" data-v="pending" aria-selected="false" type="button">Pending<span class="count" id="pendCount" hidden></span></button>
       <button role="tab" data-v="data" aria-selected="false" type="button">Data</button>
       <button role="tab" data-v="tvc" aria-selected="false" type="button">TVC</button>
+      <a class="tablink" id="sheetTab" href="" target="_blank" rel="noopener" title="Open the Google Sheet in a new tab">Google Sheet ↗</a>
     </div>
     <div class="tabs" role="tablist" aria-label="Filter by PC type" id="pcTabs">
       <button role="tab" data-f="minister" aria-selected="false" type="button">Minister PC<span class="pcn" id="pcn-minister"></span></button>
@@ -446,6 +449,7 @@ function render(){
   if(openId&&dlg.open)refreshDialog();
 }
 function drawChrome(){
+  const st=document.getElementById("sheetTab");if(st)st.href=(cfg&&cfg.sheet)||DEFAULT_SHEET;
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===state.view));
   document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,b.dataset.f)).length});
   drawPocFilter();drawWeekFilter();
