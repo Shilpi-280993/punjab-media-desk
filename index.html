@@ -219,6 +219,9 @@ td.w-desc{min-width:190px} td.w-req{min-width:185px} td.w-steps{min-width:190px}
 .tbl-wrap th,.tbl-wrap td{padding:5px 4px}
 td.w-wk{min-width:110px;width:110px} .tbl-wrap td.w-date{min-width:122px;width:122px} .tbl-wrap td.w-title{min-width:150px;width:170px} td.w-sp{min-width:86px} .tbl-wrap td.w-st{min-width:104px}
 td.w-tp{min-width:84px;width:84px}
+.racts{display:grid;gap:6px;justify-items:start}
+.x.del{color:var(--late)}
+.x.del.arm{font-weight:700;background:var(--late);color:#fff;border-radius:6px;padding:2px 6px}
 select.tsel{font-weight:700;border-radius:999px;padding:3px 6px}
 select.tsel.t-pc{background:var(--pc-bg);color:var(--pc);border-color:var(--pc)}
 select.tsel.t-ev{background:var(--ev-bg);color:var(--ev);border-color:var(--ev)}
@@ -287,7 +290,7 @@ th.ck{text-align:center;white-space:normal;min-width:64px;line-height:1.2}
       <button role="tab" data-f="all" aria-selected="true" type="button">All<span class="pcn" id="pcn-all"></span></button>
     </div>
     <select id="pocF" aria-label="Filter by POC"><option value="">All POCs</option></select>
-    <details class="wkf" id="wkF"><summary>Target week<span id="wkN"></span></summary><div class="wkmenu" id="wkMenu"></div></details>
+    <details class="wkf" id="wkF"><summary>Target week<span class="wkn"></span></summary><div class="wkmenu"></div></details>
     </div>
     <div class="conn" id="conn"><i></i><span>Connecting…</span></div>
   </div>
@@ -351,7 +354,7 @@ async function apiGet(){const r=await fetch(cfg.api+"?k="+encodeURIComponent(cfg
 async function apiPost(body){const r=await fetch(cfg.api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,k:cfg.k})});return r.json()}
 
 /* ---------- State ---------- */
-const state={acts:[],briefs:{},view:"calendar",pcf:"all",poc:"",weeks:[],month:TODAY.slice(0,7),q:"",dataScope:"month",dstat:""};
+const state={acts:[],briefs:{},view:"calendar",pcf:"all",poc:"",weeks:[],month:TODAY.slice(0,7),q:"",dataScope:"all",dstat:""};
 let pendingWrites=0,writeChain=Promise.resolve(),loaded=false;
 /* The Sheet has no Next steps column, so steps are kept at the end of Remarks under a marker line: [ ] open, [x] done. */
 const NS_MARK="--- Next steps ---";
@@ -493,17 +496,20 @@ function matchPoc(a){return !state.poc||pocList(a).some(x=>x.toLowerCase()===sta
 function wkKey(a){return String(a.week||"").trim().toLowerCase()}
 function matchWeek(a){return !state.weeks.length||state.weeks.includes(wkKey(a))}
 function visible(){return state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,state.pcf))}
-function drawWeekFilter(){const m=document.getElementById("wkMenu"),seen=new Map();
+/* Every .wkf picker (top bar and Data view) shows the same ticked target weeks. */
+function weekOrder(k){if(!k)return"99999";const s=weekSunday(k);if(s)return s;return (/^anytime/.test(k)?"99998-":"99990-")+k}
+function drawWeekFilter(){const seen=new Map();
   state.acts.forEach(a=>{const k=wkKey(a);if(!seen.has(k))seen.set(k,k?String(a.week).trim():"No target week")});
   state.weeks.forEach(k=>{if(!seen.has(k))seen.set(k,k||"No target week")});
-  const ord=k=>k?(weekSunday(k)||"9999-"+k):"99999";const keys=[...seen.keys()].sort((p,q)=>ord(p).localeCompare(ord(q)));
-  const sig=keys.join("|")+"#"+state.weeks.join("|");
-  if(m.dataset.sig!==sig){m.dataset.sig=sig;
-    m.innerHTML=`<div class="wkact"><span>Tick one or more</span><button type="button" class="x" id="wkClr">Clear</button></div>`+keys.map(k=>{const s=k&&weekSunday(k);return `<label><input type="checkbox" data-wk="${esc(k)}" ${state.weeks.includes(k)?"checked":""}> <span>${esc(seen.get(k))}${s?` <small>Sun ${fmt(s,{day:"numeric",month:"short"})}</small>`:""}</span></label>`}).join("");
-    m.querySelectorAll("[data-wk]").forEach(c=>c.onchange=()=>{const k=c.dataset.wk;state.weeks=c.checked?[...state.weeks.filter(x=>x!==k),k]:state.weeks.filter(x=>x!==k);render()});
-    m.querySelector("#wkClr").onclick=()=>{state.weeks=[];render()}}
-  const n=state.weeks.length;document.getElementById("wkN").textContent=n?": "+(n===1?seen.get(state.weeks[0]):n+" weeks"):"";document.getElementById("wkF").classList.toggle("on",!!n)}
-document.addEventListener("click",e=>{const d=document.getElementById("wkF");if(d&&d.open&&!d.contains(e.target))d.open=false});
+  const keys=[...seen.keys()].sort((p,q)=>weekOrder(p).localeCompare(weekOrder(q)));
+  const sig=keys.join("|")+"#"+state.weeks.join("|"),n=state.weeks.length,label=n?(n===1?seen.get(state.weeks[0]):n+" weeks"):"";
+  document.querySelectorAll(".wkf").forEach(d=>{const m=d.querySelector(".wkmenu");
+    if(m.dataset.sig!==sig){m.dataset.sig=sig;
+      m.innerHTML=`<div class="wkact"><span>Tick one or more</span><button type="button" class="x" data-wkclr>Clear</button></div>`+keys.map(k=>{const s=k&&weekSunday(k);return `<label><input type="checkbox" data-wk="${esc(k)}" ${state.weeks.includes(k)?"checked":""}> <span>${esc(seen.get(k))}${s?` <small>Sun ${fmt(s,{day:"numeric",month:"short"})}</small>`:""}</span></label>`}).join("");
+      m.querySelectorAll("[data-wk]").forEach(c=>c.onchange=()=>{const k=c.dataset.wk;state.weeks=c.checked?[...state.weeks.filter(x=>x!==k),k]:state.weeks.filter(x=>x!==k);render()});
+      m.querySelector("[data-wkclr]").onclick=()=>{state.weeks=[];render()}}
+    const lab=d.querySelector(".wkn");if(lab)lab.textContent=d.dataset.all?(label||d.dataset.all):(label?": "+label:"");d.classList.toggle("on",!!n)})}
+document.addEventListener("click",e=>{document.querySelectorAll(".wkf[open]").forEach(d=>{if(!d.contains(e.target))d.open=false})});
 function drawPocFilter(){const s=document.getElementById("pocF"),seen=new Map();state.acts.forEach(a=>pocList(a).forEach(x=>{if(!seen.has(x.toLowerCase()))seen.set(x.toLowerCase(),x)}));
   if(state.poc&&!seen.has(state.poc.toLowerCase()))seen.set(state.poc.toLowerCase(),state.poc);
   const names=[...seen.values()].sort((p,q)=>p.localeCompare(q)),key=names.join("|");if(s.dataset.key!==key){s.dataset.key=key;s.innerHTML=`<option value="">All POCs</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}s.value=state.poc}
@@ -602,9 +608,9 @@ function wireSteps(box,get,apply){const clean1=x=>x.replace(/\s+/g," ").trim();
   const n=box.querySelector("[data-sadd]"),add=()=>{const val=clean1(n.value);if(!val)return;n.value="";apply(stepsPatch(get(),st=>st.push({done:false,text:val})))};
   n.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();const id=n.id;add();const m=document.getElementById(id);m&&m.focus()}};n.onchange=add}
 function renderData(){
-  main.innerHTML="";const vw=document.createElement("div");vw.className="view";
+  const wkOpen=!!main.querySelector(".bar .wkf[open]");main.innerHTML="";const vw=document.createElement("div");vw.className="view";
   const bar=document.createElement("div");bar.className="bar";
-  bar.innerHTML=`<div class="left"><select id="dScope"><option value="month">${parse(state.month+"-01").toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</option><option value="upcoming">Today onwards</option><option value="unscheduled">To schedule (no date)</option><option value="all">All entries</option></select><select id="dStat" aria-label="Filter by pending or done"></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
+  bar.innerHTML=`<div class="left"><details class="wkf" data-all="All target weeks"><summary><span class="wkn">All target weeks</span></summary><div class="wkmenu"></div></details><select id="dStat" aria-label="Filter by pending or done"></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
   vw.append(bar);
   let rows=visible();
   const ek=a=>a.date||weekSunday(a.week)||"";
@@ -628,18 +634,21 @@ function renderData(){
       <td class="w-req">${reqHTML(a)}</td><td class="w-steps">${stepsHTML(a,p)}</td>
       <td class="w-st">${sel(p+"status",OVERALL.includes(a.status)||!a.status?["",...OVERALL]:["",a.status,...OVERALL],a.status||"")}</td>
       <td class="w-sp">${inp("sector")}</td><td class="w-sp">${inp("poc")}</td>
-      <td><button class="x" type="button" data-open>Open</button></td>`;
+      <td><div class="racts"><button class="x" type="button" data-open>Open</button><button class="x del" type="button" data-del title="Delete this entry from the Sheet">Delete</button></div></td>`;
     const get=()=>state.acts.find(x=>x.id===a.id),apply=q=>patch(a.id,q);
     tr.querySelectorAll("[data-f]").forEach(el=>el.addEventListener("change",()=>patch(a.id,{[el.dataset.f]:el.value.trim()})));
     const stSel=tr.querySelector(`[id="${p}status"]`);stSel.addEventListener("change",()=>patch(a.id,{status:stSel.value}));
     const tsel=tr.querySelector(`[id="${p}type"]`);tsel.addEventListener("change",()=>patch(a.id,typePatch(get(),tsel.value)));
     wireReqs(tr.querySelector(".reqs"),get,apply);wireSteps(tr.querySelector(".steps"),get,apply);
-    tr.querySelector("[data-open]").onclick=()=>openEdit(a.id);tb.append(tr)});
+    tr.querySelector("[data-open]").onclick=()=>openEdit(a.id);
+    const del=tr.querySelector("[data-del]");del.onclick=()=>{if(!del.dataset.arm){del.dataset.arm="1";del.textContent="Confirm delete";del.classList.add("arm");setTimeout(()=>{if(del.isConnected){delete del.dataset.arm;del.textContent="Delete";del.classList.remove("arm")}},5000);return}
+      const copy=structuredClone(get());remove(a.id);toast(`Deleted “${copy.title||"Untitled"}”`,()=>save(copy))};
+    tb.append(tr)});
   vw.append(w);
   if(!rows.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No entries ${state.dataScope==="month"?"this month":"here"} yet. Use “+ Add row” or double-click a day on the calendar.</div>`);
   else vw.insertAdjacentHTML("beforeend",`<div class="small muted">Each change saves to the Google Sheet when you leave the cell. You can also edit the Sheet directly; changes show up here within a minute.</div>`);
   main.append(vw);
-  const sc=document.getElementById("dScope");sc.value=state.dataScope;sc.onchange=()=>{state.dataScope=sc.value;render()};
+  drawWeekFilter();if(wkOpen)vw.querySelector(".bar .wkf").open=true;
   const ds=document.getElementById("dStat");ds.innerHTML=`<option value="">Pending and done (${stTot})</option><option value="pending">Pending (${stN.pending})</option><option value="done">Done (${stN.done})</option>`;ds.value=state.dstat;ds.onchange=()=>{state.dstat=ds.value;render()};
   const dq=document.getElementById("dq");dq.oninput=()=>{state.q=dq.value;clearTimeout(dq._t);dq._t=setTimeout(()=>{const pos=dq.selectionStart;renderData();const n=document.getElementById("dq");n.focus();n.setSelectionRange(pos,pos)},250)};
   document.getElementById("dAdd").onclick=()=>openNew(state.dataScope==="month"&&state.month!==TODAY.slice(0,7)?state.month+"-01":TODAY);
