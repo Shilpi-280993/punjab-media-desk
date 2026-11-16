@@ -222,13 +222,29 @@ td.w-tp{min-width:84px;width:84px}
 .racts{display:grid;gap:6px;justify-items:start}
 body.tvcview #pcTabs,body.tvcview #pocF,body.tvcview .navl>.wkf{display:none}
 .tvc td{vertical-align:top}
-.tvc td.c-dur{min-width:150px} .tvc td.c-camp{min-width:200px} .tvc td.c-slots{min-width:90px;width:100px} .tvc td.c-kind{min-width:110px;width:120px} .tvc td.c-films{min-width:130px} .tvc td.c-ck{text-align:center;min-width:90px;width:100px} .tvc td.c-rem{min-width:240px}
-.tvc td.c-ck input{width:20px;height:20px}
-.tvc tr.kind-National td:first-child{box-shadow:inset 4px 0 0 var(--pc)}
-.tvc tr.kind-Regional td:first-child{box-shadow:inset 4px 0 0 var(--ev)}
+.tvc td.c-dur{min-width:160px;width:170px} .tvc td.c-camp{min-width:200px} .tvc td.c-slots{min-width:76px;width:84px} .tvc td.c-kind{min-width:110px;width:118px} .tvc td.c-films{min-width:130px;width:150px} .tvc td.c-ck{text-align:center;min-width:112px;width:120px} .tvc td.c-rem{min-width:240px}
+.tvc td{padding:7px 6px}
+.tvc td.c-camp textarea{font-weight:700;font-size:.92rem}
+.tvc td.c-slots input,.tvc td.c-films input{text-align:center}
+.tvc tbody tr:not(.grp) td:first-child{box-shadow:inset 4px 0 0 var(--line)}
+.tvc tr.onair td:first-child{box-shadow:inset 4px 0 0 var(--ok)!important}
+.tvc tr.ended td{opacity:.55}
+.tvc tr.grp td{background:var(--soft);font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;padding:9px 10px;border-top:2px solid var(--line)}
+.tvc tr.grp td span{font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted);margin-left:10px}
+.tvc tr.grp.g-National td{color:var(--pc)} .tvc tr.grp.g-Regional td{color:var(--ev)}
+.tick{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);cursor:pointer;font-size:.8rem;color:var(--muted);background:var(--surface);white-space:nowrap}
+.tick input{width:15px!important;height:15px;margin:0;flex:none}
+#tKind button[data-k="National"][aria-selected="true"]{background:var(--pc);color:#fff}
+#tKind button[data-k="Regional"][aria-selected="true"]{background:var(--ev);color:#fff}
+#tKind .pcn{margin-left:6px;font-size:.78rem;opacity:.8}
+.tick.on{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:700}
 .air{display:inline-block;margin-top:4px;font-size:.72rem;font-weight:700;border-radius:999px;padding:1px 8px;background:var(--soft);color:var(--muted)}
 .air.on{background:var(--ok);color:#fff} .air.soon{background:var(--wait-bg);color:var(--wait)}
-.tvcsum{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.88rem;color:var(--muted)} .tvcsum b{color:var(--ink,inherit)}
+.tvcsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.tvcsum .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:grid;gap:2px}
+.tvcsum .card b{font-size:1.45rem;line-height:1.1}
+.tvcsum .card span{font-size:.8rem;color:var(--muted)}
+.tvcsum .card.ok b{color:var(--ok)}
 .x.del{color:var(--late)}
 .x.del.arm{font-weight:700;background:var(--late);color:#fff;border-radius:6px;padding:2px 6px}
 select.tsel{font-weight:700;border-radius:999px;padding:3px 6px}
@@ -684,24 +700,29 @@ const tvcDone=x=>/^done$/i.test(String(x||"").trim());
 function renderTvc(){
   main.innerHTML="";const vw=document.createElement("div");vw.className="view";
   const bar=document.createElement("div");bar.className="bar";
-  bar.innerHTML=`<div class="left"><select id="tKind" aria-label="Filter by type"><option value="">National and Regional</option>${TVC_KINDS.map(k=>`<option>${k}</option>`).join("")}</select></div><div class="left"><button class="btn sm primary" id="tAdd" type="button">+ Add TVC row</button></div>`;
+  bar.innerHTML=`<div class="left"><div class="tabs" role="tablist" aria-label="Filter by National or Regional" id="tKind">${[["","All"],...TVC_KINDS.map(k=>[k,k])].map(([v,l])=>`<button role="tab" type="button" data-k="${v}" aria-selected="${state.tvcKind===v}">${l}<span class="pcn">${v?state.tvc.filter(a=>a.sector===v).length:state.tvc.length}</span></button>`).join("")}</div></div><div class="left"><button class="btn sm primary" id="tAdd" type="button">+ Add TVC row</button></div>`;
   vw.append(bar);
   const ord=a=>(TVC_KINDS.indexOf(a.sector)+1||9)+"|"+((tvcRange(a.timing)||{}).start||"9999");
   const rows=state.tvc.filter(a=>!state.tvcKind||a.sector===state.tvcKind).sort((p,q)=>ord(p).localeCompare(ord(q))||(p.createdAt||"").localeCompare(q.createdAt||""));
   const onAir=rows.filter(a=>(tvcAir(a)||{}).cls==="on").length;
-  vw.insertAdjacentHTML("beforeend",`<div class="tvcsum"><span><b>${rows.length}</b> campaigns</span><span><b>${onAir}</b> on air today</span><span>Creatives done <b>${rows.filter(a=>tvcDone(a.onePager)).length}/${rows.length}</b></span><span>RO done <b>${rows.filter(a=>tvcDone(a.adCoord)).length}/${rows.length}</b></span></div>`);
+  const crN=rows.filter(a=>tvcDone(a.onePager)).length,roN=rows.filter(a=>tvcDone(a.adCoord)).length;
+  vw.insertAdjacentHTML("beforeend",`<div class="tvcsum"><div class="card"><b>${rows.length}</b><span>Campaigns</span></div><div class="card ok"><b>${onAir}</b><span>On air today</span></div><div class="card"><b>${crN}/${rows.length}</b><span>Creatives done</span></div><div class="card"><b>${roN}/${rows.length}</b><span>RO done</span></div></div>`);
   const w=document.createElement("div");w.className="tbl-wrap tvc";
   w.innerHTML=`<table><thead><tr><th>Duration</th><th>Campaign</th><th>Slots per 60 secs</th><th>Type</th><th>Duration / No. of films</th><th class="ck">Creatives done</th><th class="ck">RO done</th><th>Remarks</th><th></th></tr></thead><tbody></tbody></table>`;
   const tb=w.querySelector("tbody");
-  rows.forEach(a=>{const tr=document.createElement("tr");tr.className="kind-"+(a.sector||"x");const p="t-"+a.id+"-";const air=tvcAir(a);
+  let lastKind=null;
+  rows.forEach(a=>{const kind=TVC_KINDS.includes(a.sector)?a.sector:"Other";
+    if(kind!==lastKind){lastKind=kind;const g=rows.filter(x=>(TVC_KINDS.includes(x.sector)?x.sector:"Other")===kind);const on=g.filter(x=>(tvcAir(x)||{}).cls==="on").length;
+      tb.insertAdjacentHTML("beforeend",`<tr class="grp g-${kind}"><td colspan="9">${kind==="Other"?"Type not set":kind}<span>${g.length} campaign${g.length===1?"":"s"}${on?` · ${on} on air`:""}</span></td></tr>`)}
+    const tr=document.createElement("tr");const p="t-"+a.id+"-";const air=tvcAir(a);tr.className=air&&air.cls==="on"?"onair":air&&air.txt==="Ended"?"ended":"";
     const inp=(f,ph)=>`<input type="text" id="${p}${f}" data-f="${f}" value="${esc(a[f])}" placeholder="${ph||""}">`;
     tr.innerHTML=`<td class="c-dur">${inp("timing","e.g. 1st Dec - 15th Dec")}${air?`<span class="air ${air.cls}">${air.txt}</span>`:""}</td>
       <td class="c-camp"><textarea class="wrap" rows="1" id="${p}title" data-f="title" placeholder="Campaign">${esc(a.title)}</textarea></td>
       <td class="c-slots">${inp("venue","e.g. 10")}</td>
       <td class="c-kind">${sel(p+"sector",TVC_KINDS.includes(a.sector)||!a.sector?["",...TVC_KINDS]:["",a.sector,...TVC_KINDS],a.sector||"")}</td>
       <td class="c-films">${inp("district","e.g. 1 film 60 secs")}</td>
-      <td class="c-ck"><input type="checkbox" id="${p}cr" aria-label="Creatives done" ${tvcDone(a.onePager)?"checked":""}></td>
-      <td class="c-ck"><input type="checkbox" id="${p}ro" aria-label="RO done" ${tvcDone(a.adCoord)?"checked":""}></td>
+      <td class="c-ck"><label class="tick${tvcDone(a.onePager)?" on":""}"><input type="checkbox" id="${p}cr" aria-label="Creatives done" ${tvcDone(a.onePager)?"checked":""}><span>${tvcDone(a.onePager)?"Done":"Pending"}</span></label></td>
+      <td class="c-ck"><label class="tick${tvcDone(a.adCoord)?" on":""}"><input type="checkbox" id="${p}ro" aria-label="RO done" ${tvcDone(a.adCoord)?"checked":""}><span>${tvcDone(a.adCoord)?"Done":"Pending"}</span></label></td>
       <td class="c-rem"><textarea class="wrap" rows="2" id="${p}remarks" data-f="remarks" placeholder="Remarks">${esc(a.remarks)}</textarea></td>
       <td><div class="racts"><button class="x del" type="button" data-del title="Delete this TVC row from the Sheet">Delete</button></div></td>`;
     tr.querySelectorAll("[data-f]").forEach(el=>el.addEventListener("change",()=>tvcPatch(a.id,{[el.dataset.f]:el.value.trim()})));
@@ -715,7 +736,7 @@ function renderTvc(){
   if(!rows.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No TVC rows yet. Use “+ Add TVC row”.</div>`);
   else vw.insertAdjacentHTML("beforeend",`<div class="small muted">TVC rows are separate from the calendar. Each change saves to the Google Sheet when you leave the cell.</div>`);
   main.append(vw);
-  const tk=document.getElementById("tKind");tk.value=state.tvcKind;tk.onchange=()=>{state.tvcKind=tk.value;render()};
+  document.querySelectorAll("#tKind button").forEach(b=>b.onclick=()=>{state.tvcKind=b.dataset.k;render()});
   document.getElementById("tAdd").onclick=()=>{const a={id:uid("tvc"),type:"TVC",date:"",title:"",timing:"",venue:"",sector:state.tvcKind||"",district:"",onePager:"",adCoord:"",remarks:"",createdAt:new Date().toISOString()};
     tvcSave(a);const el=document.getElementById("t-"+a.id+"-timing");if(el)el.focus()};
 }
