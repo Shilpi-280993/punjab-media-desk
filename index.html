@@ -222,6 +222,12 @@ td.w-desc{min-width:190px} td.w-req{min-width:185px} td.w-steps{min-width:190px}
 td.w-wk{min-width:110px;width:110px} .tbl-wrap td.w-date{min-width:122px;width:122px} .tbl-wrap td.w-title{min-width:150px;width:170px} td.w-sp{min-width:86px} .tbl-wrap td.w-st{min-width:104px}
 td.w-tp{min-width:84px;width:84px}
 .racts{display:grid;gap:6px;justify-items:start}
+.optdlg{border:1px solid var(--line);border-radius:14px;padding:0;max-width:440px;width:calc(100% - 32px);background:var(--surface);color:inherit}
+.optdlg::backdrop{background:rgba(0,0,0,.35)}
+.optbox{padding:16px;display:grid;gap:10px}.optbox header{display:flex;justify-content:space-between;align-items:center}.optbox h3{margin:0}
+.optlist{margin:0;padding-left:22px;display:grid;gap:4px;max-height:50vh;overflow:auto}.optlist li{padding:2px 0}
+.optlist li{display:list-item}.optlist li>span:first-child{display:inline-block;min-width:60%}.optbtns{float:right;display:inline-flex;gap:4px}
+.optadd{display:flex;gap:8px}.optadd input{flex:1}.optfoot{text-align:right}
 body.tvcview #pcTabs,body.tvcview #pocF,body.tvcview .navl>.wkf{display:none}
 .tvc td{vertical-align:top}
 .tvc td.c-dur{min-width:160px;width:170px} .tvc td.c-camp{min-width:200px} .tvc td.c-slots{min-width:76px;width:84px} .tvc td.c-kind{min-width:110px;width:118px} .tvc td.c-films{min-width:130px;width:150px} .tvc td.c-ck{text-align:center;min-width:112px;width:120px} .tvc td.c-rem{min-width:240px}
@@ -333,7 +339,7 @@ th.ck{text-align:center;white-space:normal;min-width:64px;line-height:1.2}
 /* ---------- Tracked items ---------- */
 const DONE3=["Pending","Done","NA"], REC3=["Pending","Received","NA"], LIVE3=["Not needed","Pending","Done"];
 const ADS=["None","Size TBD","Half page","Full page"];
-const OVERALL=["Pending","Done","To be done by CM","Dropped"];
+const OVERALL=["Pending","Done","To be done by CM","Dropped","Archived"];
 const ITEMS=[
   {k:"onePager",short:"OP",label:"One pager",owner:"Department",phase:"Before",opts:REC3,off:-1,when:a=>true},
   {k:"adCoord",short:"AD",label:"Ad coordinated with parent department",owner:"Parent department",phase:"Before",opts:DONE3,off:-1,when:a=>a.printAd&&a.printAd!=="None"},
@@ -350,7 +356,8 @@ const FIELDS=["id","type","date","time","title","minister","venue","district","c
 function dflt(it){return it.opts===LIVE3?"Not needed":"Pending"}
 function v(a,it){return a[it.k]||dflt(it)}
 function applicable(a){return ITEMS.filter(i=>i.when(a))}
-function isClosed(a){return /^(done|dropped)$/i.test(a.status||"")||/^inaugurated/i.test(a.week||"")}
+function isArchived(a){return /^archived$/i.test(a.status||"")}
+function isClosed(a){return /^(done|dropped|archived)$/i.test(a.status||"")||/^inaugurated/i.test(a.week||"")}
 function stateOf(a,it){if(!itOn(a,it))return"na";const x=v(a,it);if(x==="Pending")return a.date&&addDays(a.date,it.off)<TODAY?"late":"open";if(x==="NA"||x==="Not needed")return"na";return"done"}
 function isOpen(a,it){return itOn(a,it)&&v(a,it)==="Pending"}
 function isLate(a){return !isClosed(a)&&applicable(a).some(it=>stateOf(a,it)==="late")}
@@ -426,11 +433,12 @@ async function refresh(){
     if(loaded&&sig===lastSig){setConn("Connected to Google Sheet","ok");return}
     lastSig=sig;
     const allRows=(r.acts||[]).filter(a=>a.id).map(a=>({...a,date:normDate(a.date),time:normTime(a.time)}));
-    const newActs=allRows.filter(a=>a.type!=="TVC"),newSigs=new Map(newActs.map(a=>[a.id,JSON.stringify(a)]));
+    const conf=allRows.find(a=>a.type==="Config"),newF=readConfig(conf),fChanged=newF.join("|")!==FORMATS.join("|");state.config=conf||null;FORMATS=newF;
+    const newActs=allRows.filter(a=>a.type!=="TVC"&&a.type!=="Config"),newSigs=new Map(newActs.map(a=>[a.id,JSON.stringify(a)]));
     let sameSet=newActs.length===state.acts.length&&newActs.every(a=>rowSigs.has(a.id));const changed=sameSet?newActs.filter(a=>rowSigs.get(a.id)!==newSigs.get(a.id)):[];
     rowSigs=newSigs;state.tvc=allRows.filter(a=>a.type==="TVC");state.acts=newActs;state.briefs=r.briefs||{};
     const first=!loaded;loaded=true;setConn("Connected to Google Sheet","ok");
-    if(!first&&sameSet&&state.view==="data"&&!dlg.open&&changed.length<=25){
+    if(!first&&!fChanged&&sameSet&&state.view==="data"&&!dlg.open&&changed.length<=25){
       const f=document.activeElement;changed.forEach(a=>{const old=document.getElementById("r-"+a.id+"-week");const tr=old&&old.closest("tr");if(tr&&!(f&&tr.contains(f)))quickRow(a)});drawChrome();return}
     if(first||!busyTyping())render()}
   catch(e){setConn(loaded?"Offline. Showing last loaded data":"Can't reach the Google Sheet","bad");if(!loaded)showSetup("Could not reach the Sheet. Check the Web app URL, and that it is deployed with access for Anyone.")}
@@ -451,7 +459,7 @@ function render(){
 function drawChrome(){
   const st=document.getElementById("sheetTab");if(st)st.href=(cfg&&cfg.sheet)||DEFAULT_SHEET;
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===state.view));
-  document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,b.dataset.f)).length});
+  document.querySelectorAll("#pcTabs button").forEach(b=>{b.setAttribute("aria-selected",b.dataset.f===state.pcf);document.getElementById("pcn-"+b.dataset.f).textContent=state.acts.filter(a=>!isArchived(a)&&matchPoc(a)&&matchWeek(a)&&matchPcf(a,b.dataset.f)).length});
   drawPocFilter();drawWeekFilter();
   const n=visible().filter(a=>a.date&&!isClosed(a)).reduce((s,a)=>s+applicable(a).filter(it=>isOpen(a,it)).length+FORMATS.filter(f=>hasFmt(a,f)&&!fmtDone(a,f)).length,0);const pc=document.getElementById("pendCount");pc.hidden=!n;pc.textContent=n;
 }
@@ -518,9 +526,18 @@ const bl={q:"",sector:"",closed:false};
 const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
 function weekKey(w){const m=String(w||"").match(/(\d)\w*\s+week\s+(\w{3})/i);if(m){let mo=MON[m[2].toLowerCase()]||0;if(mo<7)mo+=12;return mo*10+Number(m[1])}
   if(/anytime/i.test(w))return 900;if(/inaugurated/i.test(w))return 990;return 950}
-const FMT_SHORT={"PC":"PC","Minister site visit":"Site visit","Event with Minister":"Event","Op-ed":"Op-ed","Print ad":"Ad","Beneficiary interaction":"Beneficiaries"};
+const FMT_SHORT={"PC":"PC","Minister site visit":"Site visit","Event with Minister":"Event","Op-ed":"Op-ed","Print ad":"Ad","Beneficiary interaction":"Beneficiaries","CM event":"CM event","CM PC":"CM PC","Minister PC":"Min PC","Minister event":"Min event","Editorial":"Editorial","SMS campaign":"SMS","Vox Pop":"Vox pop","Beneficiary bytes":"Bytes","Influencer campaign":"Influencers"};
 /* Sub-parts of an activity (the Yes/No columns of the Media Calendar), stored as a comma list in "formats" */
-const FORMATS=["PC","Minister site visit","Event with Minister","Op-ed","Print ad","Beneficiary interaction"];
+/* The list is shared by everyone: it is kept in a settings row (Type "Config") in the Activities sheet and can be edited from the dashboard. */
+const DEFAULT_FORMATS=["CM event","CM PC","Minister PC","Minister event","Print ad","PR","Editorial","IVRS","WhatsApp","SMS campaign","Vox Pop","Beneficiary bytes","Influencer campaign"];
+let FORMATS=DEFAULT_FORMATS.slice();
+const CONFIG_ID="cfg-options";
+function readConfig(row){try{const j=JSON.parse(String(row&&row.context||"{}").replace(/^'/,""));if(Array.isArray(j.formats)&&j.formats.length)return j.formats.map(s=>String(s).trim()).filter(Boolean)}catch(e){}return DEFAULT_FORMATS.slice()}
+function saveFormats(list){FORMATS=[...new Set(list.map(s=>String(s).replace(/,/g," ").trim()).filter(Boolean))];
+  const row={id:CONFIG_ID,type:"Config",title:"Dashboard settings - requirement options (do not delete)",context:JSON.stringify({formats:FORMATS}),status:"",updatedAt:new Date().toISOString()};
+  state.config=row;queue({op:"save",row:clean(row)});render()}
+function addFormatOption(){const n=(prompt("New requirement option (shared with everyone):")||"").replace(/,/g," ").trim();if(!n)return"";
+  const ex=FORMATS.find(f=>f.toLowerCase()===n.toLowerCase());if(ex)return ex;saveFormats([...FORMATS,n]);toast(`Added “${n}” to the requirement options`);return n}
 function fmtRaw(a){return (a.formats||"").split(",").map(s=>s.trim()).filter(Boolean)}
 function fmtName(x){return x.replace(/\s*\(done\)$/i,"")}
 function fmtList(a){return fmtRaw(a).map(fmtName)}
@@ -528,8 +545,8 @@ function fmtDone(a,f){return fmtRaw(a).some(x=>fmtName(x)===f&&/\(done\)$/i.test
 function setFmtDone(a,f,on){return {formats:fmtRaw(a).map(x=>fmtName(x)===f?(on?f+" (done)":f):x).join(", ")}}
 function hasFmt(a,f){return fmtList(a).includes(f)}
 /* A PC is an entry of type PC, or any entry with the PC sub-part ticked. It is a CM PC when also marked CM level or To be done by CM. */
-function isPcEntry(a){return a.type==="PC"||hasFmt(a,"PC")}
-function isCmPc(a){return isPcEntry(a)&&(hasFmt(a,"CM level")||a.status==="To be done by CM")}
+function isPcEntry(a){return a.type==="PC"||hasFmt(a,"PC")||hasFmt(a,"Minister PC")||hasFmt(a,"CM PC")}
+function isCmPc(a){return isPcEntry(a)&&(hasFmt(a,"CM level")||hasFmt(a,"CM PC")||a.status==="To be done by CM")}
 /* Switching between PC, CM PC and Event. CM PC is stored as the "CM level" value in formats, so existing Sheet rows keep working. */
 function typeOf(a){return isCmPc(a)?"CM PC":a.type}
 function typePatch(a,t){const rest=fmtRaw(a).filter(x=>fmtName(x)!=="CM level");
@@ -540,7 +557,7 @@ function pocList(a){return (a.poc||"").split(/[,&\/]+|\s+and\s+/i).map(s=>s.trim
 function matchPoc(a){return !state.poc||pocList(a).some(x=>x.toLowerCase()===state.poc.toLowerCase())}
 function wkKey(a){return String(a.week||"").trim().toLowerCase()}
 function matchWeek(a){return !state.weeks.length||state.weeks.includes(wkKey(a))}
-function visible(){return state.acts.filter(a=>matchPoc(a)&&matchWeek(a)&&matchPcf(a,state.pcf))}
+function visible(withArchived){return state.acts.filter(a=>(withArchived||!isArchived(a))&&matchPoc(a)&&matchWeek(a)&&matchPcf(a,state.pcf))}
 /* Every .wkf picker (top bar and Data view) shows the same ticked target weeks. */
 function weekOrder(k){if(!k)return"99999";const s=weekSunday(k);if(s)return s;return (/^anytime/.test(k)?"99998-":"99990-")+k}
 function drawWeekFilter(){const seen=new Map();
@@ -628,11 +645,13 @@ const fmtLabel=f=>f==="Event with Minister"?"Minister event":f;
 function itOn(a,it){const x=String(a[it.k]||"").trim();return !!x&&x!=="NA"&&x!=="Not needed"}
 function itDone(a,it){return /^(done|received)$/i.test(v(a,it))}
 function reqList(a){const L=[],open=!isClosed(a);
-  FORMATS.forEach(f=>{if(hasFmt(a,f)){const d=fmtDone(a,f);L.push({key:"fmt:"+f,label:fmtLabel(f),done:d,late:open&&!d&&!!a.date&&a.date<TODAY})}});
-  applicable(a).forEach(it=>{if(itOn(a,it))L.push({key:"it:"+it.k,label:REQ_IT[it.k]||it.label,owner:it.owner,done:itDone(a,it),late:open&&stateOf(a,it)==="late"})});return L}
-function reqAddable(a){return FORMATS.filter(f=>!hasFmt(a,f)).map(f=>["fmt:"+f,fmtLabel(f)]).concat(applicable(a).filter(it=>!itOn(a,it)).map(it=>["it:"+it.k,REQ_IT[it.k]||it.label]))}
+  const have=fmtList(a).filter(f=>f!=="CM level"),ord=f=>{const i=FORMATS.indexOf(f);return i<0?999:i};
+  [...new Set(have)].sort((p,q)=>ord(p)-ord(q)).forEach(f=>{const d=fmtDone(a,f);L.push({key:"fmt:"+f,label:fmtLabel(f),done:d,late:open&&!d&&!!a.date&&a.date<TODAY})});
+  const labels=new Set(L.map(r=>r.label.toLowerCase()));
+  applicable(a).forEach(it=>{if(itOn(a,it)&&!labels.has((REQ_IT[it.k]||it.label).toLowerCase()))L.push({key:"it:"+it.k,label:REQ_IT[it.k]||it.label,owner:it.owner,done:itDone(a,it),late:open&&stateOf(a,it)==="late"})});return L}
+function reqAddable(a){return FORMATS.filter(f=>!hasFmt(a,f)).map(f=>["fmt:"+f,fmtLabel(f)])}
 function reqHTML(a){const ad=reqAddable(a);
-  return `<div class="reqs">${reqList(a).map(r=>`<div class="rq${r.done?" done":""}${r.late?" late":""}"><label title="${r.late?"Overdue":r.done?"Done":"To follow up"}"><input type="checkbox" data-rq="${esc(r.key)}" ${r.done?"checked":""}><span>${esc(r.label)}</span>${r.owner?`<small>${esc(r.owner)}</small>`:""}</label><button type="button" class="rx" data-rx="${esc(r.key)}" title="Remove ${esc(r.label)}" aria-label="Remove ${esc(r.label)}">×</button></div>`).join("")}${ad.length?`<select class="radd" data-radd aria-label="Add a requirement"><option value="">+ Add requirement</option>${ad.map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join("")}</select>`:""}</div>`}
+  return `<div class="reqs">${reqList(a).map(r=>`<div class="rq${r.done?" done":""}${r.late?" late":""}"><label title="${r.late?"Overdue":r.done?"Done":"To follow up"}"><input type="checkbox" data-rq="${esc(r.key)}" ${r.done?"checked":""}><span>${esc(r.label)}</span>${r.owner?`<small>${esc(r.owner)}</small>`:""}</label><button type="button" class="rx" data-rx="${esc(r.key)}" title="Remove ${esc(r.label)}" aria-label="Remove ${esc(r.label)}">×</button></div>`).join("")}<select class="radd" data-radd aria-label="Add a requirement"><option value="">+ Add requirement</option>${ad.map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join("")}<option value="__new">+ New option…</option><option value="__edit">Edit option list…</option></select></div>`}
 function reqPatch(a,key,act){const i=key.indexOf(":"),kind=key.slice(0,i),name=key.slice(i+1);
   if(kind==="fmt"){if(act==="add")return toggleFmt(a,name,true);if(act==="remove")return toggleFmt(a,name,false);return setFmtDone(a,name,act==="check")}
   const it=ITEMS.find(x=>x.k===name);if(!it)return{};
@@ -642,7 +661,26 @@ function reqPatch(a,key,act){const i=key.indexOf(":"),kind=key.slice(0,i),name=k
 function wireReqs(box,get,apply){
   box.querySelectorAll("[data-rq]").forEach(c=>c.onchange=()=>apply(reqPatch(get(),c.dataset.rq,c.checked?"check":"uncheck")));
   box.querySelectorAll("[data-rx]").forEach(b=>b.onclick=()=>apply(reqPatch(get(),b.dataset.rx,"remove")));
-  const s=box.querySelector("[data-radd]");if(s)s.onchange=()=>{if(s.value)apply(reqPatch(get(),s.value,"add"))}}
+  const s=box.querySelector("[data-radd]");if(s)s.onchange=()=>{const v=s.value;s.value="";if(!v)return;
+    if(v==="__edit")return openOptions();
+    if(v==="__new"){const n=addFormatOption();if(n)apply(reqPatch(get(),"fmt:"+n,"add"));return}
+    apply(reqPatch(get(),v,"add"))}}
+/* Shared requirement option list editor */
+function openOptions(){let d=document.getElementById("optDlg");if(!d){d=document.createElement("dialog");d.id="optDlg";d.className="optdlg";document.body.append(d)}
+  const draw=()=>{d.innerHTML=`<div class="optbox"><header><h3>Requirement options</h3><button class="x" type="button" data-oc aria-label="Close">Close</button></header>
+    <p class="small muted">This list is shared with everyone using the dashboard. Removing an option does not remove it from entries that already have it.</p>
+    <ol class="optlist">${FORMATS.map((f,i)=>`<li><span>${esc(f)}</span><span class="optbtns"><button type="button" class="x" data-up="${i}" aria-label="Move ${esc(f)} up" ${i?"":"disabled"}>↑</button><button type="button" class="x" data-dn="${i}" aria-label="Move ${esc(f)} down" ${i<FORMATS.length-1?"":"disabled"}>↓</button><button type="button" class="rx" data-rm="${i}" aria-label="Remove ${esc(f)}">×</button></span></li>`).join("")}</ol>
+    <div class="optadd"><input type="text" id="optNew" placeholder="Add an option, e.g. Radio spot"><button class="btn sm primary" type="button" data-oa>Add</button></div>
+    <div class="optfoot"><button class="x" type="button" data-od>Reset to default list</button></div></div>`;
+    d.querySelector("[data-oc]").onclick=()=>d.close();
+    d.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const L=FORMATS.slice();L.splice(+b.dataset.rm,1);saveFormats(L);draw()});
+    const mv=(i,j)=>{const L=FORMATS.slice();[L[i],L[j]]=[L[j],L[i]];saveFormats(L);draw()};
+    d.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>mv(+b.dataset.up,+b.dataset.up-1));
+    d.querySelectorAll("[data-dn]").forEach(b=>b.onclick=()=>mv(+b.dataset.dn,+b.dataset.dn+1));
+    const inp=d.querySelector("#optNew"),add=()=>{const n=inp.value.replace(/,/g," ").trim();if(!n)return;if(!FORMATS.some(f=>f.toLowerCase()===n.toLowerCase()))saveFormats([...FORMATS,n]);draw();const m=d.querySelector("#optNew");m&&m.focus()};
+    d.querySelector("[data-oa]").onclick=add;inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();add()}};
+    d.querySelector("[data-od]").onclick=()=>{saveFormats(DEFAULT_FORMATS.slice());draw()}};
+  draw();if(!d.open)d.showModal()}
 function stepsHTML(a,p){const st=splitRem(a.remarks).steps;
   return `<div class="steps">${st.map((s,i)=>`<div class="stp${s.done?" done":""}"><input type="checkbox" data-si="${i}" aria-label="Mark step done" ${s.done?"checked":""}><textarea class="wrap" rows="1" id="${p}st${i}" data-st="${i}" aria-label="Next step">${esc(s.text)}</textarea><button type="button" class="rx" data-sx="${i}" title="Remove step" aria-label="Remove step">×</button></div>`).join("")}<input type="text" class="sadd" id="${p}stnew" data-sadd placeholder="+ Add next step, then Enter"></div>`}
 function stepsPatch(a,fn){const s=splitRem(a.remarks),steps=s.steps.map(x=>({...x}));fn(steps);return{remarks:joinRem(s.rem,steps)}}
@@ -656,16 +694,16 @@ function wireSteps(box,get,apply){const clean1=x=>x.replace(/\s+/g," ").trim();
 function renderData(){
   const wkOpen=!!main.querySelector(".bar .wkf[open]");main.innerHTML="";const vw=document.createElement("div");vw.className="view";
   const bar=document.createElement("div");bar.className="bar";
-  bar.innerHTML=`<div class="left"><details class="wkf" data-all="All target weeks"><summary><span class="wkn">All target weeks</span></summary><div class="wkmenu"></div></details><select id="dStat" aria-label="Filter by pending or done"></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
+  bar.innerHTML=`<div class="left"><details class="wkf" data-all="All target weeks"><summary><span class="wkn">All target weeks</span></summary><div class="wkmenu"></div></details><select id="dStat" aria-label="Filter by pending or done"></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm" id="dOpt" type="button">Requirement options</button><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
   vw.append(bar);
-  let rows=visible();
+  let rows=visible(true);
   const ek=a=>a.date||weekSunday(a.week)||"";
   if(state.dataScope==="month")rows=rows.filter(a=>ek(a).slice(0,7)===state.month);
   if(state.dataScope==="upcoming")rows=rows.filter(a=>ek(a)>=TODAY);
   if(state.dataScope==="unscheduled")rows=rows.filter(a=>!a.date);
-  const stOf=a=>isClosed(a)?(/^dropped$/i.test(a.status||"")?"dropped":"done"):"pending";
-  const stN={pending:0,done:0};rows.forEach(a=>{const s=stOf(a);if(s in stN)stN[s]++});const stTot=rows.length;
-  if(state.dstat)rows=rows.filter(a=>stOf(a)===state.dstat);
+  const stOf=a=>isArchived(a)?"archived":isClosed(a)?(/^dropped$/i.test(a.status||"")?"dropped":"done"):"pending";
+  const stN={pending:0,done:0,archived:0};rows.forEach(a=>{const s=stOf(a);if(s in stN)stN[s]++});const stTot=rows.length-stN.archived;
+  rows=state.dstat?rows.filter(a=>stOf(a)===state.dstat):rows.filter(a=>!isArchived(a));
   const q=state.q.trim().toLowerCase();if(q)rows=rows.filter(a=>[a.title,a.venue,a.minister,a.district,a.context,a.sector,a.poc,a.week,a.remarks].join(" ").toLowerCase().includes(q));
   rows.sort((p,q2)=>(ek(p)||"9999").localeCompare(ek(q2)||"9999")||(p.title||"").localeCompare(q2.title||""));
   const cols=["Type","Target week","Date","Heading","Brief description","Requirements","Next steps","Status","Sector","POC",""];
@@ -678,8 +716,9 @@ function renderData(){
   else vw.insertAdjacentHTML("beforeend",`<div class="small muted">Each change saves to the Google Sheet when you leave the cell. Changes made by others, or directly in the Sheet, show up here within about 20 seconds.</div>`);
   main.append(vw);
   drawWeekFilter();if(wkOpen)vw.querySelector(".bar .wkf").open=true;
-  const ds=document.getElementById("dStat");ds.innerHTML=`<option value="">Pending and done (${stTot})</option><option value="pending">Pending (${stN.pending})</option><option value="done">Done (${stN.done})</option>`;ds.value=state.dstat;ds.onchange=()=>{state.dstat=ds.value;render()};
+  const ds=document.getElementById("dStat");ds.innerHTML=`<option value="">Pending and done (${stTot})</option><option value="pending">Pending (${stN.pending})</option><option value="done">Done (${stN.done})</option><option value="archived">Archived (${stN.archived})</option>`;ds.value=state.dstat;ds.onchange=()=>{state.dstat=ds.value;render()};
   const dq=document.getElementById("dq");dq.oninput=()=>{state.q=dq.value;clearTimeout(dq._t);dq._t=setTimeout(()=>{const pos=dq.selectionStart;renderData();const n=document.getElementById("dq");n.focus();n.setSelectionRange(pos,pos)},250)};
+  document.getElementById("dOpt").onclick=()=>openOptions();
   document.getElementById("dAdd").onclick=()=>openNew(state.dataScope==="month"&&state.month!==TODAY.slice(0,7)?state.month+"-01":TODAY);
   if(cfg.sheet){const l=document.getElementById("sheetLink");l.href=cfg.sheet;l.hidden=false}
 }
@@ -822,13 +861,14 @@ function drawDialog(){
   </div>
   <div class="subparts"><div class="phase">What this activity needs</div>
     <div class="sp" role="group" aria-label="What this activity needs">${FORMATS.map((f,i)=>`<button type="button" class="spb" id="sp-${i}" data-f="${esc(f)}" aria-pressed="${hasFmt(a,f)}"><span class="tick" aria-hidden="true"></span>${esc(f)}</button>`).join("")}</div>
-    <div class="small muted">Tap to switch each one on or off. Print ad also sets the Print ad field above.</div></div>
+    <div class="small muted">Tap to switch each one on or off. Print ad also sets the Print ad field above. <button class="x" type="button" id="dOpts">Edit option list</button></div></div>
   <div>${items}</div>
   <div class="subparts"><div class="phase">Next steps</div><div id="dSteps">${stepsHTML(a,"d-")}</div></div>
   <div class="form"><label class="full">Remarks<textarea id="fRem">${esc(splitRem(a.remarks).rem)}</textarea></label></div>
   <div class="foot">${isNew?`<span class="small muted">You can change everything later.</span><button class="btn primary" type="button" id="dSave">Add to calendar</button>`:`<button class="btn sm" type="button" id="dDel">Delete</button><span class="small muted">Changes save as you go.</span>`}</div><div id="cf"></div>`;
   body.querySelector("#dClose").onclick=()=>dlg.close();
   const dDone=body.querySelector("#dDone");if(dDone)dDone.onclick=()=>toggleDone(openId);
+  body.querySelector("#dOpts").onclick=()=>openOptions();
   body.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{const p=typePatch(cur(),b.dataset.t);if(isNew)Object.assign(draft,p);else patch(openId,p);drawDialog()});
   const map={fTitle:"title",fDate:"date",fTime:"time",fMin:"minister",fVenue:"venue",fDist:"district",fAd:"printAd",fCtx:"context",fRem:"remarks",fSec:"sector",fPoc:"poc",fSt:"status",fWk:"week",fTim:"timing"};
   const remJoin=(k,val)=>k==="remarks"?joinRem(val,splitRem(cur().remarks).steps):val;
