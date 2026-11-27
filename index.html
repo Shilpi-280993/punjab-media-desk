@@ -270,14 +270,17 @@ td textarea.big{min-height:5.6em}
 .rq{flex-wrap:wrap} .rq .rqd{flex-basis:100%;margin:1px 0 3px 8px;font-size:.75rem;padding:1px 4px;max-width:150px} .rq .rqd.empty{opacity:.55}
 .rqdates{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 10px;margin-top:8px} .rqdates label{display:grid;gap:2px;font-size:.85rem}
 .fusum{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.9rem}
-.fuday{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:8px 12px;display:grid;gap:2px}
-.fuday header{display:flex;gap:10px;align-items:baseline;padding-bottom:4px;border-bottom:1px solid var(--line)} .fuday h3{font-size:1rem;margin:0} .fuday header small{color:var(--muted)}
-.fuday.past h3{color:var(--late)} .fuday.today{border-color:var(--pc)}
-.furow{display:grid;grid-template-columns:minmax(150px,200px) minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 0;border-top:1px solid var(--soft)}
-.furow:first-of-type{border-top:none} .furow .fuck{display:flex;gap:6px;align-items:center;font-weight:600;cursor:pointer}
-.furow .fuck input{width:auto;margin:0} .furow .pt{min-width:0;cursor:pointer} .furow .pt b{display:block;overflow-wrap:anywhere;font-size:.93rem} .furow .pt small{color:var(--muted)}
-.furow input[type=date]{font-size:.8rem;padding:2px 4px} .furow.done .fuck span,.furow.done .pt b{text-decoration:line-through;color:var(--muted)} .furow.late .fuck{color:var(--late)}
-@media (max-width:640px){.furow{grid-template-columns:1fr auto}.furow .pt{grid-column:1/-1;order:3}}
+.futbl{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);overflow:hidden}
+.fuhead,.furow{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(200px,300px);gap:12px;align-items:center;padding:7px 12px}
+.fuhead{background:var(--soft);font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.furow{border-top:1px solid var(--soft)} .furow.first{border-top:1px solid var(--line)}
+.furow .fud{font-weight:700;font-size:.88rem} .furow.late .fud,.furow.late .fuck{color:var(--late)} .furow.today .fud{color:var(--pc)}
+.furow .pt{min-width:0;cursor:pointer} .furow .pt b{display:block;overflow-wrap:anywhere;font-size:.93rem} .furow .pt small{color:var(--muted)}
+.fureq{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.furow .fuck{display:flex;gap:6px;align-items:center;font-weight:600;cursor:pointer} .furow .fuck input{width:auto;margin:0}
+.furow input[type=date]{font-size:.8rem;padding:2px 4px;width:auto} .furow.done .fuck span,.furow.done .pt b{text-decoration:line-through;color:var(--muted)}
+.funo{display:grid;color:var(--muted)} .funo small{font-size:.78rem}
+@media (max-width:640px){.fuhead{display:none}.furow{grid-template-columns:1fr;gap:4px}.furow .fud:empty{display:none}}
 .rq label{flex:1;display:flex;gap:6px;align-items:center;font-size:.85rem;cursor:pointer;padding:2px 5px;border-radius:6px;background:var(--soft);border-left:3px solid var(--wait)}
 .rq label small{color:var(--muted);font-size:.72rem}
 .rq.done label{border-left-color:var(--ok)}
@@ -832,27 +835,32 @@ function renderTvc(){
 /* ---------- Follow-ups (requirements by their own dates) ---------- */
 function renderFollowups(){
   main.innerHTML="";const vw=document.createElement("div");vw.className="view";
-  const acts=visible().filter(a=>!/^dropped$/i.test(a.status||""));let undated=0,doneN=0;const items=[];
-  acts.forEach(a=>fmtRaw(a).forEach(x=>{const f=fmtName(x);if(f==="CM level")return;const d=rawDate(x),done=/\(done\)$/i.test(x);
-    if(!d){if(!done)undated++;return}if(done){doneN++;if(!state.fuDone)return}items.push({a,f,d,done})}));
-  items.sort((p,q)=>p.d.localeCompare(q.d)||(p.a.title||"").localeCompare(q.a.title||""));
-  const late=items.filter(i=>!i.done&&i.d<TODAY).length,today=items.filter(i=>!i.done&&i.d===TODAY).length;
+  const acts=visible().filter(a=>!/^dropped$/i.test(a.status||""));let doneN=0,evN=0;const items=[];
+  acts.forEach(a=>{const und=[];fmtRaw(a).forEach(x=>{const f=fmtName(x);if(f==="CM level")return;const d=rawDate(x),done=/\(done\)$/i.test(x);
+      if(!d){if(!done)und.push(f);return}if(done){doneN++;if(!state.fuDone)return}items.push({a,f,d,done})});
+    if(und.length){evN++;items.push({a,ev:true,und,d:a.date||""})}});
+  items.sort((p,q)=>(p.d||"9999").localeCompare(q.d||"9999")||(p.a.title||"").localeCompare(q.a.title||"")||(p.ev?1:0)-(q.ev?1:0));
+  const open=items.filter(i=>!i.ev&&!i.done),late=open.filter(i=>i.d<TODAY).length,today=open.filter(i=>i.d===TODAY).length;
   const bar=document.createElement("div");bar.className="bar";
-  bar.innerHTML=`<div class="left fusum"><span><b>${items.filter(i=>!i.done).length}</b> open with dates</span><span class="${late?"lateword":""}"><b>${late}</b> overdue</span><span><b>${today}</b> due today</span>${undated?`<span class="muted">${undated} requirement${undated>1?"s":""} without a date (set dates in the Data tab)</span>`:""}</div><div class="left"><label class="small"><input type="checkbox" id="fuDone" ${state.fuDone?"checked":""}> Show done (${doneN})</label></div>`;
+  bar.innerHTML=`<div class="left fusum"><span><b>${open.length}</b> dated requirement${open.length===1?"":"s"} open</span><span class="${late?"lateword":""}"><b>${late}</b> overdue</span><span><b>${today}</b> due today</span>${evN?`<span class="muted">${evN} event${evN>1?"s":""} listed on the event date (requirements not dated yet)</span>`:""}</div><div class="left"><label class="small"><input type="checkbox" id="fuDone" ${state.fuDone?"checked":""}> Show done (${doneN})</label></div>`;
   vw.append(bar);
-  const tomorrow=addDays(TODAY,1);let cur=null,box=null;
-  items.forEach(i=>{if(i.d!==cur){cur=i.d;const past=i.d<TODAY&&items.some(j=>j.d===i.d&&!j.done);
-      const lab=i.d===TODAY?"Today":i.d===tomorrow?"Tomorrow":fmt(i.d,{weekday:"short",day:"numeric",month:"short"});
-      box=document.createElement("section");box.className="fuday"+(past?" past":"")+(i.d===TODAY?" today":"");
-      box.innerHTML=`<header><h3>${past?"Overdue · ":""}${esc(lab)}</h3>${i.d===TODAY||i.d===tomorrow?`<small>${fmt(i.d,{weekday:"short",day:"numeric",month:"short"})}</small>`:""}</header>`;vw.append(box)}
-    const r=document.createElement("div");r.className="furow"+(i.done?" done":"")+(!i.done&&i.d<TODAY?" late":"");
-    r.innerHTML=`<label class="fuck" title="${i.done?"Done":"Mark done"}"><input type="checkbox" ${i.done?"checked":""}><span>${esc(fmtLabel(i.f))}</span></label>
-      <div class="pt"><b>${esc(i.a.title||"Untitled")}</b><small>${typeTag(i.a)} ${esc([i.a.sector,i.a.poc].filter(Boolean).join(" · "))}${i.a.date?" · Activity "+fmt(i.a.date,{day:"numeric",month:"short"}):i.a.week?" · "+esc(i.a.week):""}</small></div>
-      <input type="date" value="${esc(i.d)}" aria-label="Date for ${esc(fmtLabel(i.f))}">`;
-    r.querySelector(".fuck input").onchange=e=>{const on=e.target.checked;patch(i.a.id,setFmtDone(i.a,i.f,on));toast(`${fmtLabel(i.f)} ${on?"marked done":"reopened"}`,()=>{const x=state.acts.find(y=>y.id===i.a.id);if(x)patch(x.id,setFmtDone(x,i.f,!on))})};
-    r.querySelector("input[type=date]").onchange=e=>patch(i.a.id,setFmtDate(i.a,i.f,e.target.value));
-    r.querySelector(".pt").onclick=()=>openEdit(i.a.id);box.append(r)});
-  if(!items.length)vw.insertAdjacentHTML("beforeend",`<div class="empty">No follow-ups with dates${state.fuDone?"":" still open"}. Add a date next to a requirement (PR, Print ad, Beneficiary bytes…) in the Data tab or in an entry, and it shows up here by date.</div>`);
+  const tomorrow=addDays(TODAY,1);
+  const tbl=document.createElement("div");tbl.className="futbl";
+  tbl.innerHTML=`<div class="fuhead"><span>Date</span><span>Event</span><span>Requirement</span></div>`;
+  let cur=null;
+  items.forEach(i=>{const first=i.d!==cur;cur=i.d;
+    const late=!i.ev&&!i.done&&i.d&&i.d<TODAY;
+    const lab=!i.d?(i.a.week||"No date"):(i.d===TODAY?"Today · ":i.d===tomorrow?"Tomorrow · ":"")+fmt(i.d,{weekday:"short",day:"numeric",month:"short"});
+    const r=document.createElement("div");r.className="furow"+(first?" first":"")+(i.done?" done":"")+(late?" late":"")+(i.ev?" ev":"")+(i.d===TODAY?" today":"");
+    const evc=`<div class="pt"><b>${esc(i.a.title||"Untitled")}</b><small>${typeTag(i.a)} ${esc([i.a.sector,i.a.poc].filter(Boolean).join(" · "))}${!i.ev&&i.a.date&&i.a.date!==i.d?" · Event "+fmt(i.a.date,{day:"numeric",month:"short"}):""}</small></div>`;
+    const req=i.ev?`<div class="funo"><span>—</span><small>No date set: ${esc(i.und.map(fmtLabel).join(", "))}</small></div>`
+      :`<div class="fureq"><label class="fuck" title="${i.done?"Done":"Mark done"}"><input type="checkbox" ${i.done?"checked":""}><span>${esc(fmtLabel(i.f))}</span></label><input type="date" value="${esc(i.d)}" aria-label="Date for ${esc(fmtLabel(i.f))}"></div>`;
+    r.innerHTML=`<div class="fud">${first?esc(lab):""}</div>${evc}${req}`;
+    if(!i.ev){r.querySelector(".fuck input").onchange=e=>{const on=e.target.checked;patch(i.a.id,setFmtDone(i.a,i.f,on));toast(`${fmtLabel(i.f)} ${on?"marked done":"reopened"}`,()=>{const x=state.acts.find(y=>y.id===i.a.id);if(x)patch(x.id,setFmtDone(x,i.f,!on))})};
+      r.querySelector("input[type=date]").onchange=e=>patch(i.a.id,setFmtDate(i.a,i.f,e.target.value))}
+    r.querySelector(".pt").onclick=()=>openEdit(i.a.id);tbl.append(r)});
+  if(items.length)vw.append(tbl);
+  else vw.insertAdjacentHTML("beforeend",`<div class="empty">No follow-ups${state.fuDone?"":" still open"}.</div>`);
   main.append(vw);
   document.getElementById("fuDone").onchange=e=>{state.fuDone=e.target.checked;render()};
 }
