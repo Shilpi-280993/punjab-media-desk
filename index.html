@@ -231,7 +231,7 @@ td.w-tp{min-width:84px;width:84px}
 .optlist{margin:0;padding-left:22px;display:grid;gap:4px;max-height:50vh;overflow:auto}.optlist li{padding:2px 0}
 .optlist li{display:list-item}.optlist li>span:first-child{display:inline-block;min-width:60%}.optbtns{float:right;display:inline-flex;gap:4px}
 .optadd{display:flex;gap:8px}.optadd input{flex:1}.optfoot{text-align:right}
-.vfsel{display:none} body.vfview .vfsel{display:inline-block;width:auto} .vfsel.on{border-color:var(--pc);color:var(--pc);font-weight:600}
+.vfsel{display:none} body.vfview .vfsel{display:inline-block;width:auto} #dConf.on,.vfsel.on{border-color:var(--pc);color:var(--pc);font-weight:600}
 body.tvcview #pcTabs,body.tvcview #pocF,body.tvcview .navl>.wkf{display:none}
 .tvc td{vertical-align:top}
 .tvc td.c-dur{min-width:160px;width:170px} .tvc td.c-camp{min-width:200px} .tvc td.c-slots{min-width:76px;width:84px} .tvc td.c-kind{min-width:110px;width:118px} .tvc td.c-films{min-width:130px;width:150px} .tvc td.c-ck{text-align:center;min-width:112px;width:120px} .tvc td.c-rem{min-width:240px}
@@ -345,7 +345,7 @@ th.ck{text-align:center;white-space:normal;min-width:64px;line-height:1.2}
     </div>
     <select id="pocF" aria-label="Filter by POC"><option value="">All POCs</option></select>
     <select id="stF" class="vfsel" aria-label="Filter by status"><option value="">All statuses</option><option value="pending">Pending</option><option value="done">Done</option><option value="cm">To be done by CM</option><option value="dropped">Dropped</option></select>
-    <select id="cfF" class="vfsel" aria-label="Filter by confirmed or tentative"><option value="">Confirmed + Tentative</option><option value="Confirmed">Confirmed</option><option value="Tentative">Tentative</option><option value="none">Not marked</option></select>
+    <select id="cfF" class="vfsel" aria-label="Filter by confirmed or tentative"><option value="">Confirmed + Tentative</option><option value="Confirmed">Confirmed</option><option value="Tentative">Tentative</option></select>
     <details class="wkf" id="wkF"><summary>Target week<span class="wkn"></span></summary><div class="wkmenu"></div></details>
     </div>
     <div class="conn" id="conn"><i></i><span>Connecting…</span></div>
@@ -411,7 +411,7 @@ async function apiGet(){const r=await fetch(cfg.api+"?k="+encodeURIComponent(cfg
 async function apiPost(body){const r=await fetch(cfg.api,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,k:cfg.k})});return r.json()}
 
 /* ---------- State ---------- */
-const state={acts:[],briefs:{},view:"calendar",pcf:"all",poc:"",weeks:[],month:TODAY.slice(0,7),q:"",dataScope:"all",dstat:"",tvc:[],tvcKind:"",fuDone:false,stf:"",cff:""};
+const state={acts:[],briefs:{},view:"calendar",pcf:"all",poc:"",weeks:[],month:TODAY.slice(0,7),q:"",dataScope:"all",dstat:"",tvc:[],tvcKind:"",fuDone:false,stf:"",cff:"",dconf:""};
 let pendingWrites=0,writeChain=Promise.resolve(),loaded=false;
 /* The Sheet has no Next steps column, so steps are kept at the end of Remarks under a marker line: [ ] open, [x] done. */
 const NS_MARK="--- Next steps ---";
@@ -442,7 +442,7 @@ function normTime(s){s=String(s||"").trim();if(!s||/^\d{1,2}:\d{2}$/.test(s))ret
 function save(a){a.updatedAt=new Date().toISOString();const i=state.acts.findIndex(x=>x.id===a.id);if(i>=0)state.acts[i]=a;else state.acts.push(a);if(i>=0&&!dlg.open&&quickRow(a))drawChrome();else render();queue({op:"save",row:clean(a)})}
 function patch(id,p){const a=state.acts.find(x=>x.id===id);if(!a)return;save({...a,...p})}
 function remove(id){state.acts=state.acts.filter(a=>a.id!==id);render();queue({op:"delete",id})}
-function blank(type,date){const a={id:uid(type==="PC"?"pc":"ev"),type,date:date||TODAY,time:"",title:"",minister:"",venue:"",district:"",context:"",printAd:"None",digitalLink:"",socialLink:"",remarks:"",createdAt:new Date().toISOString()};
+function blank(type,date){const a={id:uid(type==="PC"?"pc":"ev"),type,date:date||TODAY,time:"Tentative",title:"",minister:"",venue:"",district:"",context:"",printAd:"None",digitalLink:"",socialLink:"",remarks:"",createdAt:new Date().toISOString()};
   return a}
 
 let lastSig="",rowSigs=new Map();
@@ -496,7 +496,7 @@ function weekSunday(w){const m=String(w||"").match(/(\d)\w*\s+week\s+(\w{3})/i);
   const d=new Date(y,mo-1,4);d.setDate(4+(7-d.getDay())%7+(Number(m[1])-1)*7);return iso(d)}
 /* Whether the activity is confirmed or tentative. Kept in the Sheet's old Time column (field "time"). */
 const CONF=["Confirmed","Tentative"];
-function confOf(a){const x=String(a.time||"").trim();return /^confirmed$/i.test(x)?"Confirmed":/^tentative$/i.test(x)?"Tentative":""}
+function confOf(a){const x=String(a.time||"").trim();return /^confirmed$/i.test(x)?"Confirmed":"Tentative"}
 function confTag(a){const c=confOf(a);return c?` <span class="tag cf ${c==="Tentative"?"tent":"conf"}">${c}</span>`:""}
 function confCls(a){const c=confOf(a);return c==="Tentative"?" tent":c==="Confirmed"?" conf":""}
 function typeTag(a){if(isCmPc(a))return `<span class="tag cmpc">CM PC</span>`+confTag(a);return `<span class="tag ${a.type==="Event"?"ev":"pc"}">${a.type==="Event"?"Event":"PC"}</span>`+confTag(a)}
@@ -589,7 +589,7 @@ function matchPoc(a){return !state.poc||pocList(a).some(x=>x.toLowerCase()===sta
 function wkKey(a){return String(a.week||"").trim().toLowerCase()}
 function matchWeek(a){return !state.weeks.length||state.weeks.includes(wkKey(a))}
 function matchSt(a){const s=String(a.status||"").trim().toLowerCase();switch(state.stf){case"":return true;case"pending":return !s||s==="pending";case"done":return s==="done";case"cm":return s==="to be done by cm";case"dropped":return s==="dropped"}return true}
-function matchCf(a){if(!state.cff)return true;const c=confOf(a);return state.cff==="none"?!c:c===state.cff}
+function matchCf(a){return !state.cff||confOf(a)===state.cff}
 function visibleF(){return visible().filter(a=>matchSt(a)&&matchCf(a))}
 function visible(withArchived){return state.acts.filter(a=>(withArchived||!isArchived(a))&&matchPoc(a)&&matchWeek(a)&&matchPcf(a,state.pcf))}
 /* Every .wkf picker (top bar and Data view) shows the same ticked target weeks. */
@@ -729,7 +729,7 @@ function wireSteps(box,get,apply){const clean1=x=>x.replace(/\s+/g," ").trim();
 function renderData(){
   const wkOpen=!!main.querySelector(".bar .wkf[open]");main.innerHTML="";const vw=document.createElement("div");vw.className="view";
   const bar=document.createElement("div");bar.className="bar";
-  bar.innerHTML=`<div class="left"><details class="wkf" data-all="All target weeks"><summary><span class="wkn">All target weeks</span></summary><div class="wkmenu"></div></details><select id="dStat" aria-label="Filter by pending or done"></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm" id="dOpt" type="button">Requirement options</button><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
+  bar.innerHTML=`<div class="left"><details class="wkf" data-all="All target weeks"><summary><span class="wkn">All target weeks</span></summary><div class="wkmenu"></div></details><select id="dStat" aria-label="Filter by pending or done"></select><select id="dConf" aria-label="Filter by confirmed or tentative"></select><input type="search" id="dq" placeholder="Search heading, venue, minister" value="${esc(state.q)}"></div><div class="left"><a class="x" id="sheetLink" target="_blank" rel="noopener" hidden>Open the Google Sheet</a><button class="btn sm" id="dOpt" type="button">Requirement options</button><button class="btn sm primary" id="dAdd" type="button">+ Add row</button></div>`;
   vw.append(bar);
   let rows=visible(true);
   const ek=a=>a.date||weekSunday(a.week)||"";
@@ -739,6 +739,7 @@ function renderData(){
   const stOf=a=>isArchived(a)?"archived":isClosed(a)?(/^dropped$/i.test(a.status||"")?"dropped":"done"):"pending";
   const stN={pending:0,done:0,archived:0};rows.forEach(a=>{const s=stOf(a);if(s in stN)stN[s]++});const stTot=rows.length-stN.archived;
   rows=state.dstat?rows.filter(a=>stOf(a)===state.dstat):rows.filter(a=>!isArchived(a));
+  const cfN={Confirmed:0,Tentative:0};rows.forEach(a=>cfN[confOf(a)]++);if(state.dconf)rows=rows.filter(a=>confOf(a)===state.dconf);
   const q=state.q.trim().toLowerCase();if(q)rows=rows.filter(a=>[a.title,a.venue,a.minister,a.district,a.context,a.sector,a.poc,a.week,a.remarks].join(" ").toLowerCase().includes(q));
   rows.sort((p,q2)=>(ek(p)||"9999").localeCompare(ek(q2)||"9999")||(p.title||"").localeCompare(q2.title||""));
   const cols=["Type","Target week","Date","Heading","Brief description","Requirements","Next steps","Status","Sector","POC",""];
@@ -752,6 +753,7 @@ function renderData(){
   main.append(vw);
   drawWeekFilter();if(wkOpen)vw.querySelector(".bar .wkf").open=true;
   const ds=document.getElementById("dStat");ds.innerHTML=`<option value="">Pending and done (${stTot})</option><option value="pending">Pending (${stN.pending})</option><option value="done">Done (${stN.done})</option><option value="archived">Archived (${stN.archived})</option>`;ds.value=state.dstat;ds.onchange=()=>{state.dstat=ds.value;render()};
+  const dc=document.getElementById("dConf");dc.innerHTML=`<option value="">Confirmed + Tentative (${cfN.Confirmed+cfN.Tentative})</option><option value="Confirmed">Confirmed (${cfN.Confirmed})</option><option value="Tentative">Tentative (${cfN.Tentative})</option>`;dc.value=state.dconf;dc.classList.toggle("on",!!state.dconf);dc.onchange=()=>{state.dconf=dc.value;render()};
   const dq=document.getElementById("dq");dq.oninput=()=>{state.q=dq.value;clearTimeout(dq._t);dq._t=setTimeout(()=>{const pos=dq.selectionStart;renderData();const n=document.getElementById("dq");n.focus();n.setSelectionRange(pos,pos)},250)};
   document.getElementById("dOpt").onclick=()=>openOptions();
   document.getElementById("dAdd").onclick=()=>openNew(state.dataScope==="month"&&state.month!==TODAY.slice(0,7)?state.month+"-01":TODAY);
@@ -765,7 +767,7 @@ function quickRow(a){if(state.view!=="data")return false;const old=document.getE
 function dataRow(a){const tr=document.createElement("tr");if(isClosed(a))tr.className="inactive";else if(isCmPc(a))tr.className="cmpc";const p="r-"+a.id+"-";
     const inp=(f,t,ph)=>`<input type="${t||"text"}" id="${p}${f}" data-f="${f}" value="${esc(a[f])}" ${ph?`placeholder="${ph}"`:""}>`;
     const ta=(f,cls,rows,ph)=>`<textarea class="wrap ${cls||""}" rows="${rows}" id="${p}${f}" data-f="${f}" ${ph?`placeholder="${ph}"`:""}>${esc(a[f])}</textarea>`;
-    tr.innerHTML=`<td class="w-tp">${sel(p+"type",["PC","CM PC","Event"],typeOf(a),"tsel t-"+(typeOf(a)==="CM PC"?"cm":typeOf(a)==="Event"?"ev":"pc"))}<select id="${p}conf" class="csel${confCls(a)}" aria-label="Confirmed or tentative"><option value="">Not set</option>${CONF.map(o=>`<option ${o===confOf(a)?"selected":""}>${o}</option>`).join("")}</select></td><td class="w-wk">${inp("week","text","e.g. 3rd week Nov")}</td><td class="w-date">${inp("date","date")}</td>
+    tr.innerHTML=`<td class="w-tp">${sel(p+"type",["PC","CM PC","Event"],typeOf(a),"tsel t-"+(typeOf(a)==="CM PC"?"cm":typeOf(a)==="Event"?"ev":"pc"))}<select id="${p}conf" class="csel${confCls(a)}" aria-label="Confirmed or tentative">${CONF.map(o=>`<option ${o===confOf(a)?"selected":""}>${o}</option>`).join("")}</select></td><td class="w-wk">${inp("week","text","e.g. 3rd week Nov")}</td><td class="w-date">${inp("date","date")}</td>
       <td class="w-title">${ta("title","",2)}</td><td class="w-desc">${ta("context","big",4,"Brief description")}</td>
       <td class="w-req">${reqHTML(a)}</td><td class="w-steps">${stepsHTML(a,p)}</td>
       <td class="w-st">${sel(p+"status",OVERALL.includes(a.status)||!a.status?["",...OVERALL]:["",a.status,...OVERALL],a.status||"")}</td>
@@ -916,7 +918,7 @@ function drawDialog(){
   <div class="form">
     <label class="full">Heading<input type="text" class="title-in" id="fTitle" value="${esc(a.title)}" placeholder="${a.type==="PC"?"What is the PC about":"Event name"}"></label>
     <label title="Leave empty to keep it in the To schedule list">Date (optional)<input type="date" id="fDate" value="${a.date||""}"></label>
-    <label>Confirmed / Tentative<select id="fTime">${["",...CONF].map(o=>`<option value="${o}" ${o===confOf(a)?"selected":""}>${o||"Not set"}</option>`).join("")}</select></label>
+    <label>Confirmed / Tentative<select id="fTime">${CONF.map(o=>`<option value="${o}" ${o===confOf(a)?"selected":""}>${o}</option>`).join("")}</select></label>
     <label>Minister / Department<input type="text" id="fMin" value="${esc(a.minister)}"></label>
     <label>Venue<input type="text" id="fVenue" value="${esc(a.venue)}"></label>
     <label>District<input type="text" id="fDist" value="${esc(a.district)}"></label>
